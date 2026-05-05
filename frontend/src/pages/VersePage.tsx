@@ -1,4 +1,14 @@
-import { ArrowDownToLine, ArrowUpFromLine, BookOpenCheck, GitBranch, Info, Search } from 'lucide-react';
+import {
+   ArrowDownToLine,
+   ArrowUpFromLine,
+   BookOpenCheck,
+   GitBranch,
+   Info,
+   Maximize2,
+   Search,
+   ZoomIn,
+   ZoomOut,
+} from 'lucide-react';
 import {
    forceCenter,
    forceCollide,
@@ -85,6 +95,20 @@ interface DragState {
    pointerId: number;
    offsetX: number;
    offsetY: number;
+}
+
+interface PanState {
+   pointerId: number;
+   startX: number;
+   startY: number;
+   viewX: number;
+   viewY: number;
+}
+
+interface GraphViewTransform {
+   x: number;
+   y: number;
+   scale: number;
 }
 
 interface Neighborhood {
@@ -302,6 +326,7 @@ export function VersePage({ datasetId }: VersePageProps): React.ReactElement {
                      selectedVerse={selectedVerseRef}
                      nodes={nodes}
                      links={links}
+                     layers={layers}
                      selectedRelatedVerseId={selectedDetailVerseId}
                      onSelect={setSelectedRelatedVerseId}
                   />
@@ -509,6 +534,7 @@ interface VerseGraphProps {
    selectedVerse: VerseRef | null;
    nodes: GraphNode[];
    links: GraphLink[];
+   layers: number;
    selectedRelatedVerseId: number | null;
    onSelect: (verseId: number) => void;
 }
@@ -517,6 +543,7 @@ function VerseGraph({
    selectedVerse,
    nodes,
    links,
+   layers,
    selectedRelatedVerseId,
    onSelect,
 }: VerseGraphProps): React.ReactElement {
@@ -526,29 +553,51 @@ function VerseGraph({
    );
    const [renderNodes, setRenderNodes] = useState<ForceGraphNode[]>(graphData.nodes);
    const [renderLinks, setRenderLinks] = useState<ForceGraphLink[]>(graphData.links);
+   const [view, setView] = useState<GraphViewTransform>({ x: 0, y: 0, scale: 1 });
    const simulationRef = useRef<Simulation<ForceGraphNode, ForceGraphLink> | null>(null);
    const dragStateRef = useRef<DragState | null>(null);
+   const panStateRef = useRef<PanState | null>(null);
+   const viewRef = useRef<GraphViewTransform>(view);
+
+   useEffect(() => {
+      viewRef.current = view;
+   }, [ view ]);
+
+   useEffect(() => {
+      setView({ x: 0, y: 0, scale: 1 });
+   }, [ graphData ]);
 
    useEffect(() => {
       const simulationNodes = graphData.nodes.map((node, index) => seedForceNode(node, index));
       const simulationLinks = graphData.links.map((link) => ({ ...link }));
+      const layerSpread = Math.max(0, layers - 1);
       const simulation = forceSimulation<ForceGraphNode>(simulationNodes)
          .force(
             'link',
             forceLink<ForceGraphNode, ForceGraphLink>(simulationLinks)
                .id((node) => String(node.verseId))
-               .distance((link) => (link.direction === 'outgoing' ? 126 : 146))
-               .strength(0.48),
+               .distance((link) => {
+                  const source = forceEndpoint(link.source);
+                  const target = forceEndpoint(link.target);
+                  const touchesSelected = Boolean(source?.selected || target?.selected);
+
+                  return touchesSelected
+                     ? 156 + layerSpread * 42
+                     : link.direction === 'outgoing'
+                        ? 124 + layerSpread * 22
+                        : 142 + layerSpread * 24;
+               })
+               .strength((link) => (forceEndpoint(link.source)?.selected || forceEndpoint(link.target)?.selected ? 0.38 : 0.46)),
          )
-         .force('charge', forceManyBody<ForceGraphNode>().strength((node) => (node.selected ? -640 : -250)))
-         .force('collide', forceCollide<ForceGraphNode>().radius((node) => nodeRadius(node) + 20))
+         .force('charge', forceManyBody<ForceGraphNode>().strength((node) => (node.selected ? -780 - layerSpread * 260 : -250 - node.depth * 36)))
+         .force('collide', forceCollide<ForceGraphNode>().radius((node) => nodeRadius(node) + 22 + layerSpread * 8))
          .force(
             'radial',
             forceRadial<ForceGraphNode>(
-               (node) => (node.selected ? 0 : 118 + Math.min(node.depth, 3) * 104),
+               (node) => (node.selected ? 0 : 136 + Math.min(node.depth, 3) * (112 + layerSpread * 30)),
                0,
                0,
-            ).strength(0.46),
+            ).strength(0.42),
          )
          .force('center', forceCenter(0, 0))
          .alpha(0.95)
@@ -569,13 +618,15 @@ function VerseGraph({
             simulationRef.current = null;
          }
       };
-   }, [ graphData ]);
+   }, [ graphData, layers ]);
 
    const handlePointerDown = (node: ForceGraphNode, event: React.PointerEvent<SVGGElement>): void => {
+      event.stopPropagation();
       const point = svgPoint(event);
+      const graphPoint = point ? viewToGraphPoint(point, viewRef.current) : null;
       const simulationNode = simulationRef.current?.nodes().find((candidate) => candidate.verseId === node.verseId);
 
-      if (!point || !simulationNode) {
+      if (!graphPoint || !simulationNode) {
          onSelect(node.verseId);
          return;
       }
@@ -583,13 +634,13 @@ function VerseGraph({
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
       onSelect(node.verseId);
-      simulationNode.fx = simulationNode.x ?? point.x;
-      simulationNode.fy = simulationNode.y ?? point.y;
+      simulationNode.fx = simulationNode.x ?? graphPoint.x;
+      simulationNode.fy = simulationNode.y ?? graphPoint.y;
       dragStateRef.current = {
          verseId: node.verseId,
          pointerId: event.pointerId,
-         offsetX: point.x - (simulationNode.x ?? 0),
-         offsetY: point.y - (simulationNode.y ?? 0),
+         offsetX: graphPoint.x - (simulationNode.x ?? 0),
+         offsetY: graphPoint.y - (simulationNode.y ?? 0),
       };
       simulationRef.current?.alphaTarget(0.18).restart();
    };
@@ -601,15 +652,16 @@ function VerseGraph({
       }
 
       const point = svgPoint(event);
+      const graphPoint = point ? viewToGraphPoint(point, viewRef.current) : null;
       const simulation = simulationRef.current;
       const simulationNode = simulation?.nodes().find((candidate) => candidate.verseId === dragState.verseId);
 
-      if (!point || !simulation || !simulationNode) {
+      if (!graphPoint || !simulation || !simulationNode) {
          return;
       }
 
-      simulationNode.fx = point.x - dragState.offsetX;
-      simulationNode.fy = point.y - dragState.offsetY;
+      simulationNode.fx = graphPoint.x - dragState.offsetX;
+      simulationNode.fy = graphPoint.y - dragState.offsetY;
       simulationNode.x = simulationNode.fx;
       simulationNode.y = simulationNode.fy;
       simulation.alphaTarget(0.18).restart();
@@ -628,79 +680,191 @@ function VerseGraph({
       simulationRef.current?.alphaTarget(0);
    };
 
+   const handleGraphPointerDown = (event: React.PointerEvent<SVGSVGElement>): void => {
+      if (event.button !== 0 || !isPanStartTarget(event.target)) {
+         return;
+      }
+
+      const point = svgPoint(event);
+      if (!point) {
+         return;
+      }
+
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      panStateRef.current = {
+         pointerId: event.pointerId,
+         startX: point.x,
+         startY: point.y,
+         viewX: viewRef.current.x,
+         viewY: viewRef.current.y,
+      };
+   };
+
+   const handleGraphPointerMove = (event: React.PointerEvent<SVGSVGElement>): void => {
+      const panState = panStateRef.current;
+      if (!panState || panState.pointerId !== event.pointerId) {
+         return;
+      }
+
+      const point = svgPoint(event);
+      if (!point) {
+         return;
+      }
+
+      setView((current) => ({
+         ...current,
+         x: panState.viewX + point.x - panState.startX,
+         y: panState.viewY + point.y - panState.startY,
+      }));
+   };
+
+   const handleGraphPointerUp = (event: React.PointerEvent<SVGSVGElement>): void => {
+      const panState = panStateRef.current;
+      if (!panState || panState.pointerId !== event.pointerId) {
+         return;
+      }
+
+      panStateRef.current = null;
+      event.currentTarget.releasePointerCapture(event.pointerId);
+   };
+
+   const zoomBy = (factor: number): void => {
+      setView((current) => ({
+         ...current,
+         scale: clamp(current.scale * factor, 0.45, 2.8),
+      }));
+   };
+
+   const resetView = (): void => {
+      setView({ x: 0, y: 0, scale: 1 });
+   };
+
+   const handleWheel = (event: React.WheelEvent<SVGSVGElement>): void => {
+      event.preventDefault();
+
+      const point = svgPoint(event);
+      if (!point) {
+         return;
+      }
+
+      const current = viewRef.current;
+      const nextScale = clamp(current.scale * (event.deltaY > 0 ? 0.9 : 1.1), 0.45, 2.8);
+      const graphPoint = viewToGraphPoint(point, current);
+
+      setView({
+         scale: nextScale,
+         x: point.x - graphPoint.x * nextScale,
+         y: point.y - graphPoint.y * nextScale,
+      });
+   };
+
    return (
-      <svg className="verse-graph" viewBox="-480 -340 960 680" role="img" aria-label="Selected verse local reference graph">
-         <defs>
-            <marker id="arrow-outgoing" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
-               <path d="M 0 0 L 10 5 L 0 10 z" fill="#d1a447" />
-            </marker>
-            <marker id="arrow-incoming" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
-               <path d="M 0 0 L 10 5 L 0 10 z" fill="#6f9fe8" />
-            </marker>
-         </defs>
-         <g className="verse-link-layer">
-            {renderLinks.map((link) => {
-               const source = forceEndpoint(link.source);
-               const target = forceEndpoint(link.target);
+      <div className="verse-graph-shell">
+         <div className="graph-controls" aria-label="Graph zoom controls">
+            <button className="icon-button compact" type="button" onClick={() => zoomBy(1.18)} title="Zoom in">
+               <ZoomIn size={16} />
+            </button>
+            <button className="icon-button compact" type="button" onClick={() => zoomBy(0.84)} title="Zoom out">
+               <ZoomOut size={16} />
+            </button>
+            <button className="icon-button compact" type="button" onClick={resetView} title="Reset view">
+               <Maximize2 size={16} />
+            </button>
+         </div>
+         <svg
+            className="verse-graph"
+            viewBox="-480 -340 960 680"
+            role="img"
+            aria-label="Selected verse local reference graph"
+            onPointerDown={handleGraphPointerDown}
+            onPointerMove={handleGraphPointerMove}
+            onPointerUp={handleGraphPointerUp}
+            onPointerCancel={handleGraphPointerUp}
+            onWheel={handleWheel}
+         >
+            <defs>
+               <marker id="arrow-outgoing" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="#d1a447" />
+               </marker>
+               <marker id="arrow-incoming" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="#6f9fe8" />
+               </marker>
+            </defs>
+            <rect className="graph-pan-surface" x="-480" y="-340" width="960" height="680" />
+            <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+               <g className="verse-link-layer">
+                  {renderLinks.map((link) => {
+                     const source = forceEndpoint(link.source);
+                     const target = forceEndpoint(link.target);
 
-               if (!source || !target || source.x === undefined || source.y === undefined || target.x === undefined || target.y === undefined) {
-                  return null;
-               }
+                     if (
+                        !source ||
+                        !target ||
+                        source.x === undefined ||
+                        source.y === undefined ||
+                        target.x === undefined ||
+                        target.y === undefined
+                     ) {
+                        return null;
+                     }
 
-               return (
-                  <path
-                     key={link.key}
-                     d={straightLinkPath(source, target)}
-                     className={link.direction === 'outgoing' ? 'verse-link outgoing' : 'verse-link incoming'}
-                     markerEnd={link.direction === 'outgoing' ? 'url(#arrow-outgoing)' : 'url(#arrow-incoming)'}
-                  />
-               );
-            })}
-         </g>
-         <g className="verse-node-layer">
-            {renderNodes.map((node) => {
-               const active = !node.selected && node.verseId === selectedRelatedVerseId;
-               const centerActive = node.selected && node.verseId === selectedRelatedVerseId;
-               const x = node.x ?? 0;
-               const y = node.y ?? 0;
+                     return (
+                        <path
+                           key={link.key}
+                           d={straightLinkPath(source, target)}
+                           className={link.direction === 'outgoing' ? 'verse-link outgoing' : 'verse-link incoming'}
+                           markerEnd={link.direction === 'outgoing' ? 'url(#arrow-outgoing)' : 'url(#arrow-incoming)'}
+                        />
+                     );
+                  })}
+               </g>
+               <g className="verse-node-layer">
+                  {renderNodes.map((node) => {
+                     const active = !node.selected && node.verseId === selectedRelatedVerseId;
+                     const centerActive = node.selected && node.verseId === selectedRelatedVerseId;
+                     const x = node.x ?? 0;
+                     const y = node.y ?? 0;
 
-               return (
-                  <g
-                     key={node.verseId}
-                     className="force-node-group"
-                     transform={`translate(${x} ${y})`}
-                     onPointerDown={(event) => handlePointerDown(node, event)}
-                     onPointerMove={handlePointerMove}
-                     onPointerUp={handlePointerUp}
-                     onPointerCancel={handlePointerUp}
-                  >
-                     {node.selected ? (
-                        <>
-                           <circle r={nodeRadius(node)} className={centerActive ? 'center-node active' : 'center-node'} />
-                           <text y={-4} textAnchor="middle" className="center-label">
-                              {selectedVerse ? selectedVerse.label.split(' ')[0] : 'Verse'}
-                           </text>
-                           <text y={16} textAnchor="middle" className="center-label small">
-                              {selectedVerse ? selectedVerse.label.replace(`${selectedVerse.label.split(' ')[0]} `, '') : ''}
-                           </text>
-                        </>
-                     ) : (
-                        <>
-                           <circle
-                              r={active ? nodeRadius(node) + 5 : nodeRadius(node)}
-                              className={nodeClassName(node, active)}
-                              onClick={() => onSelect(node.verseId)}
-                           />
-                           <text y={nodeRadius(node) + 17} textAnchor="middle" className="verse-node-label">
-                              {shortVerseLabel(node.label)}
-                           </text>
-                        </>
-                     )}
-                  </g>
-               );
-            })}
-         </g>
-      </svg>
+                     return (
+                        <g
+                           key={node.verseId}
+                           className="force-node-group"
+                           transform={`translate(${x} ${y})`}
+                           onPointerDown={(event) => handlePointerDown(node, event)}
+                           onPointerMove={handlePointerMove}
+                           onPointerUp={handlePointerUp}
+                           onPointerCancel={handlePointerUp}
+                        >
+                           {node.selected ? (
+                              <>
+                                 <circle r={nodeRadius(node)} className={centerActive ? 'center-node active' : 'center-node'} />
+                                 <text y={-4} textAnchor="middle" className="center-label">
+                                    {selectedVerse ? selectedVerse.label.split(' ')[0] : 'Verse'}
+                                 </text>
+                                 <text y={16} textAnchor="middle" className="center-label small">
+                                    {selectedVerse ? selectedVerse.label.replace(`${selectedVerse.label.split(' ')[0]} `, '') : ''}
+                                 </text>
+                              </>
+                           ) : (
+                              <>
+                                 <circle
+                                    r={active ? nodeRadius(node) + 5 : nodeRadius(node)}
+                                    className={nodeClassName(node, active)}
+                                    onClick={() => onSelect(node.verseId)}
+                                 />
+                                 <text y={nodeRadius(node) + 17} textAnchor="middle" className="verse-node-label">
+                                    {shortVerseLabel(node.label)}
+                                 </text>
+                              </>
+                           )}
+                        </g>
+                     );
+                  })}
+               </g>
+            </g>
+         </svg>
+      </div>
    );
 }
 
@@ -792,8 +956,9 @@ function straightLinkPath(source: ForceGraphNode, target: ForceGraphNode): strin
    return `M ${sourceX} ${sourceY} L ${targetX} ${targetY}`;
 }
 
-function svgPoint(event: React.PointerEvent<SVGGElement>): { x: number; y: number } | null {
-   const svg = event.currentTarget.ownerSVGElement;
+function svgPoint(event: React.PointerEvent<SVGElement> | React.WheelEvent<SVGSVGElement>): { x: number; y: number } | null {
+   const currentTarget = event.currentTarget;
+   const svg = currentTarget instanceof SVGSVGElement ? currentTarget : currentTarget.ownerSVGElement;
    const matrix = svg?.getScreenCTM();
 
    if (!svg || !matrix) {
@@ -805,6 +970,21 @@ function svgPoint(event: React.PointerEvent<SVGGElement>): { x: number; y: numbe
    point.y = event.clientY;
 
    return point.matrixTransform(matrix.inverse());
+}
+
+function viewToGraphPoint(point: { x: number; y: number }, view: GraphViewTransform): { x: number; y: number } {
+   return {
+      x: (point.x - view.x) / view.scale,
+      y: (point.y - view.y) / view.scale,
+   };
+}
+
+function isPanStartTarget(target: EventTarget): boolean {
+   return target instanceof SVGSVGElement || (target instanceof Element && target.classList.contains('graph-pan-surface'));
+}
+
+function clamp(value: number, min: number, max: number): number {
+   return Math.min(max, Math.max(min, value));
 }
 
 function nodeRadius(node: Pick<ForceGraphNode, 'depth' | 'edges' | 'selected'>): number {

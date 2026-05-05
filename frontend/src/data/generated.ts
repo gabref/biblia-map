@@ -2,6 +2,7 @@ import type {
    Book,
    BookMatrix,
    Chapter,
+   CompactEdges,
    DatasetManifest,
    DatasetRegistryEntry,
    EdgeKindFilter,
@@ -42,6 +43,12 @@ export async function loadBookMatrix(datasetId: string, edgeKind: EdgeKindFilter
    const matrixName = edgeKind === 'combined' ? 'combined' : edgeKind === 'crossrefs' ? 'crossrefs' : 'study-notes';
 
    return loadDatasetJson<BookMatrix>(datasetId, `matrices/book.${matrixName}.json`);
+}
+
+export async function loadCompactEdges(datasetId: string, edgeKind: EdgeKindFilter): Promise<CompactEdges> {
+   const edgeName = edgeKind === 'combined' ? 'combined' : edgeKind === 'crossrefs' ? 'crossrefs' : 'study-notes';
+
+   return loadDatasetJson<CompactEdges>(datasetId, `edges/${edgeName}.compact.json`);
 }
 
 export async function loadSourceAdjacency(datasetId: string, book: Book): Promise<SourceAdjacency> {

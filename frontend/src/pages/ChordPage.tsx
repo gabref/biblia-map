@@ -87,7 +87,7 @@ export function ChordPage({ datasetId }: ChordPageProps): React.ReactElement {
 
    const visibleTotal = matrixTotal(filteredMatrix);
    const selectedBook = selectedBookNumber ? data.books[selectedBookNumber - 1] : null;
-   const bookWeights = bookWeightTotals(filteredMatrix);
+   const bookWeights = bookWeightTotals(data.matrix);
    const resetFilters = (): void => {
       setEdgeKind('combined');
       setScope('all');

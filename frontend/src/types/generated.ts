@@ -134,6 +134,17 @@ export interface VerseRef {
 export type VerseIndex = Record<string, VerseRef>;
 export type BookMatrix = number[][];
 
+export interface CompactEdges {
+   source: number[];
+   targetStart: number[];
+   targetEnd: number[];
+   kind: EdgeKindCode[];
+   paragraphOrdinal: Array<number | null>;
+   sortPosition: Array<number | null>;
+   commentaryId: Array<number | null>;
+   documentId: Array<number | null>;
+}
+
 export interface AdjacentEdge {
    source: number;
    targetStart: number;

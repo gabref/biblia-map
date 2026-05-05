@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, CircleHelp, GitBranch, Network } from 'lucide-react';
+import { BarChart3, Blocks, BookOpen, CircleHelp, GitBranch, Network } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { DatasetBadge } from './components/DatasetBadge';
@@ -9,9 +9,10 @@ import { useAsyncData } from './hooks/useAsyncData';
 import { AboutPage } from './pages/AboutPage';
 import { ChordPage } from './pages/ChordPage';
 import { OverviewPage } from './pages/OverviewPage';
+import { RelationshipBlocksPage } from './pages/RelationshipBlocksPage';
 import { VersePage } from './pages/VersePage';
 
-type RouteId = 'overview' | 'chord' | 'verse' | 'about';
+type RouteId = 'overview' | 'chord' | 'verse' | 'blocks' | 'about';
 
 interface Route {
    id: RouteId;
@@ -24,6 +25,7 @@ const routes: Route[] = [
    { id: 'overview', href: '/', label: 'Overview', icon: <BarChart3 size={18} /> },
    { id: 'chord', href: '/chord', label: 'Book Graph', icon: <Network size={18} /> },
    { id: 'verse', href: '/verse', label: 'Verse Explorer', icon: <GitBranch size={18} /> },
+   { id: 'blocks', href: '/blocks', label: 'Blocks', icon: <Blocks size={18} /> },
    { id: 'about', href: '/about', label: 'About', icon: <CircleHelp size={18} /> },
 ];
 
@@ -110,15 +112,11 @@ export function App(): React.ReactElement {
                selectedDatasetId={selectedDataset.datasetId}
                onChange={handleDatasetChange}
             />
-            <p className="sidebar-credit">
-               <span>developed by gabudev.cloud;</span>
-               <a href="https://github.com/gabref" target="_blank" rel="noreferrer">
-                  GitHub GitHub.com/gabref
-               </a>
-            </p>
+            <CreditLinks className="sidebar-credit" />
          </aside>
 
          <main className="main-surface">{renderRoute(activeRoute, selectedDataset.datasetId)}</main>
+         <CreditLinks className="mobile-credit" />
       </div>
    );
 }
@@ -130,6 +128,10 @@ function routeFromPath(path: string): RouteId {
 
    if (path.startsWith('/verse')) {
       return 'verse';
+   }
+
+   if (path.startsWith('/blocks')) {
+      return 'blocks';
    }
 
    if (path.startsWith('/about')) {
@@ -145,10 +147,29 @@ function renderRoute(route: RouteId, datasetId: string): React.ReactNode {
          return <ChordPage datasetId={datasetId} />;
       case 'verse':
          return <VersePage datasetId={datasetId} />;
+      case 'blocks':
+         return <RelationshipBlocksPage datasetId={datasetId} />;
       case 'about':
          return <AboutPage datasetId={datasetId} />;
       case 'overview':
       default:
          return <OverviewPage datasetId={datasetId} />;
    }
+}
+
+function CreditLinks({ className }: { className: string }): React.ReactElement {
+   return (
+      <p className={className}>
+         <span>
+            developed by{' '}
+            <a href="https://gabudev.cloud/" target="_blank" rel="noreferrer">
+               gabudev.cloud
+            </a>
+            ;
+         </span>
+         <a href="https://github.com/gabref/biblia-map" target="_blank" rel="noreferrer">
+            GitHub GitHub.com/gabref/biblia-map
+         </a>
+      </p>
+   );
 }

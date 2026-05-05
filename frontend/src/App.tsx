@@ -1,4 +1,4 @@
-import { BarChart3, Blocks, BookOpen, CircleHelp, GitBranch, Network } from 'lucide-react';
+import { BarChart3, Blocks, CircleHelp, GitBranch, Network } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { DatasetBadge } from './components/DatasetBadge';
@@ -85,7 +85,7 @@ export function App(): React.ReactElement {
          <aside className="sidebar" aria-label="Primary navigation">
             <a href="/" className="brand" onClick={(event) => navigate(event, '/')}>
                <span className="brand-mark">
-                  <BookOpen size={22} />
+                  <img src="/bibliamap-icon.svg" alt="" />
                </span>
                <span>
                   <span className="brand-title">BibliaMap</span>

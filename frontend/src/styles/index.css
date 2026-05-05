@@ -77,7 +77,6 @@ button {
    text-decoration: none;
 }
 
-.brand-mark,
 .stat-icon {
    display: grid;
    width: 42px;
@@ -86,6 +85,20 @@ button {
    color: #1d211f;
    background: var(--brass);
    border-radius: 8px;
+}
+
+.brand-mark {
+   display: grid;
+   width: 44px;
+   height: 44px;
+   place-items: center;
+   border-radius: 10px;
+}
+
+.brand-mark img {
+   display: block;
+   width: 100%;
+   height: 100%;
 }
 
 .brand-title {

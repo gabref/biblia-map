@@ -1,0 +1,10 @@
+[package]
+name = "bibliamap-core"
+description = "Canonical BibliaMap graph types and aggregation helpers."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true

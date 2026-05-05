@@ -628,7 +628,7 @@ function VerseGraph({
    );
 }
 
-function buildForceGraph(selectedVerse: VerseRef | null, nodes: GraphNode[], links: GraphLink[]): {
+export function buildForceGraph(selectedVerse: VerseRef | null, nodes: GraphNode[], links: GraphLink[]): {
    nodes: ForceGraphNode[];
    links: ForceGraphLink[];
 } {
@@ -654,8 +654,8 @@ function buildForceGraph(selectedVerse: VerseRef | null, nodes: GraphNode[], lin
       .filter((link) => nodeMap.has(link.source) && nodeMap.has(link.target))
       .slice(0, 280)
       .map((link, index) => ({
-         source: link.source,
-         target: link.target,
+         source: String(link.source),
+         target: String(link.target),
          direction: link.direction,
          kind: link.kind,
          edge: link.edge,

@@ -850,27 +850,6 @@ meter::-webkit-meter-optimum-value {
    box-shadow: 0 0 22px rgba(209, 164, 71, 0.22);
 }
 
-.component-bubbles {
-   position: absolute;
-   right: 28px;
-   bottom: 28px;
-   display: flex;
-   align-items: end;
-   justify-content: end;
-   max-width: 48%;
-   min-height: 160px;
-   gap: 10px;
-   opacity: 0.72;
-}
-
-.component-bubbles span {
-   display: block;
-   flex: 0 0 auto;
-   background: rgba(123, 158, 135, 0.28);
-   border: 1px solid rgba(247, 240, 223, 0.18);
-   border-radius: 999px;
-}
-
 .block-list {
    display: grid;
    gap: 12px;
@@ -925,10 +904,11 @@ meter::-webkit-meter-optimum-value {
    max-width: 900px;
    margin: 0 0 12px;
    padding: 12px 14px;
-   color: var(--ink);
-   background: rgba(255, 255, 255, 0.07);
-   border: 1px solid var(--line);
+   color: #ffd8cd;
+   background: rgba(183, 109, 79, 0.14);
+   border: 1px solid rgba(183, 109, 79, 0.58);
    border-radius: 8px;
+   box-shadow: inset 3px 0 0 var(--clay);
    line-height: 1.65;
 }
 
@@ -1058,7 +1038,7 @@ meter::-webkit-meter-optimum-value {
 }
 
 .center-node.active {
-   fill: var(--brass);
+   fill: var(--clay);
    stroke-width: 2.4;
 }
 
@@ -1414,15 +1394,6 @@ meter::-webkit-meter-optimum-value {
    .graph-controls {
       top: 8px;
       right: 8px;
-   }
-
-   .component-bubbles {
-      position: static;
-      max-width: none;
-      min-height: 0;
-      margin-top: 18px;
-      justify-content: start;
-      overflow: hidden;
    }
 
    .block-row {

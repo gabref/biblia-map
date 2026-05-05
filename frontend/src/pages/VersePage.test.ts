@@ -103,4 +103,49 @@ describe('buildForceGraph', () => {
             .stop();
       }).not.toThrow();
    });
+
+   it('keeps the analyzed verse selected when deeper layers point back to it', () => {
+      const graph = buildForceGraph(
+         {
+            jwpubVerseId: 100,
+            canonicalVerseId: 45_012_012,
+            bookNumber: 45,
+            chapterNumber: 12,
+            verseNumber: 12,
+            label: 'Romans 12:12',
+         },
+         [
+            {
+               verseId: 100,
+               label: 'Romans 12:12',
+               depth: 2,
+               incomingCount: 1,
+               outgoingCount: 0,
+               edges: [
+                  {
+                     source: 200,
+                     target: 100,
+                     direction: 'incoming',
+                     kind: 0,
+                     edge: {
+                        source: 200,
+                        targetStart: 100,
+                        targetEnd: 100,
+                        kind: 0,
+                     },
+                  },
+               ],
+            },
+         ],
+         [],
+      );
+
+      expect(graph.nodes).toHaveLength(1);
+      expect(graph.nodes[0]).toMatchObject({
+         verseId: 100,
+         selected: true,
+         depth: 0,
+         incomingCount: 1,
+      });
+   });
 });

@@ -87,17 +87,6 @@ export function RelationshipBlocksPage({ datasetId }: RelationshipBlocksPageProp
                      <BlockBar key={component.id} component={component} totalVerses={summary.totalVerses} />
                   ))}
                </div>
-               <div className="component-bubbles" aria-hidden="true">
-                  {topComponents.map((component) => (
-                     <span
-                        key={component.id}
-                        style={{
-                           width: `${bubbleSize(component.percent)}px`,
-                           height: `${bubbleSize(component.percent)}px`,
-                        }}
-                     />
-                  ))}
-               </div>
             </article>
 
             <aside className="side-panel">
@@ -186,8 +175,4 @@ function BlockBar({ component, totalVerses }: BlockBarProps): React.ReactElement
          <i style={{ width }} />
       </div>
    );
-}
-
-function bubbleSize(percent: number): number {
-   return Math.max(18, Math.min(138, 18 + Math.sqrt(percent) * 150));
 }

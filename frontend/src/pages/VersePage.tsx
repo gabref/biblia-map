@@ -283,17 +283,16 @@ export function VersePage({ datasetId }: VersePageProps): React.ReactElement {
 
             <SegmentedControl label="Direction" options={directionOptions} value={direction} onChange={setDirection} />
             <SegmentedControl label="Reference type" options={edgeKindOptions} value={edgeKind} onChange={setEdgeKind} />
-            <label className="range-control compact-range">
+            <label className="select-control">
                <span>Layers</span>
-               <input
-                  type="range"
-                  min={1}
-                  max={3}
-                  step={1}
+               <select
                   value={layers}
                   onChange={(event) => setLayers(Number(event.target.value))}
-               />
-               <strong>{layers}</strong>
+               >
+                  <option value={1}>1 layer</option>
+                  <option value={2}>2 layers</option>
+                  <option value={3}>3 layers</option>
+               </select>
             </label>
          </FilterPanel>
 
@@ -887,6 +886,16 @@ export function buildForceGraph(selectedVerse: VerseRef | null, nodes: GraphNode
    }
 
    for (const node of nodes.slice(0, 139)) {
+      const existing = nodeMap.get(node.verseId);
+
+      if (existing?.selected) {
+         existing.depth = 0;
+         existing.incomingCount += node.incomingCount;
+         existing.outgoingCount += node.outgoingCount;
+         existing.edges.push(...node.edges);
+         continue;
+      }
+
       nodeMap.set(node.verseId, { ...node, selected: false });
    }
 

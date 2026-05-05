@@ -110,6 +110,12 @@ export function App(): React.ReactElement {
                selectedDatasetId={selectedDataset.datasetId}
                onChange={handleDatasetChange}
             />
+            <p className="sidebar-credit">
+               <span>developed by gabudev.cloud;</span>
+               <a href="https://github.com/gabref" target="_blank" rel="noreferrer">
+                  GitHub GitHub.com/gabref
+               </a>
+            </p>
          </aside>
 
          <main className="main-surface">{renderRoute(activeRoute, selectedDataset.datasetId)}</main>

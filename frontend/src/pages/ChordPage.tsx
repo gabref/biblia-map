@@ -1,7 +1,7 @@
 import { descending } from 'd3-array';
 import { chord as chordLayout, type Chord, type ChordGroup } from 'd3-chord';
 import { arc } from 'd3-shape';
-import { RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { ErrorState } from '../components/ErrorState';
@@ -44,6 +44,7 @@ export function ChordPage({ datasetId }: ChordPageProps): React.ReactElement {
    const [minWeight, setMinWeight] = useState(25);
    const [showSelfLinks, setShowSelfLinks] = useState(true);
    const [selectedBookNumber, setSelectedBookNumber] = useState<number | null>(null);
+   const [booksPanelCollapsed, setBooksPanelCollapsed] = useState(false);
    const [tooltip, setTooltip] = useState<TooltipState | null>(null);
    const { data, error, showLoading } = useAsyncData(
       async () => {
@@ -87,6 +88,14 @@ export function ChordPage({ datasetId }: ChordPageProps): React.ReactElement {
    const visibleTotal = matrixTotal(filteredMatrix);
    const selectedBook = selectedBookNumber ? data.books[selectedBookNumber - 1] : null;
    const bookWeights = bookWeightTotals(filteredMatrix);
+   const resetFilters = (): void => {
+      setEdgeKind('combined');
+      setScope('all');
+      setMinWeight(25);
+      setShowSelfLinks(true);
+      setSelectedBookNumber(null);
+      setTooltip(null);
+   };
 
    return (
       <div className="page-stack">
@@ -95,7 +104,7 @@ export function ChordPage({ datasetId }: ChordPageProps): React.ReactElement {
             title="Chord diagram"
             description="The chord view reads only 66 by 66 precomputed matrices, so global exploration stays light."
          >
-            <button className="icon-button" type="button" onClick={() => setSelectedBookNumber(null)} title="Clear book">
+            <button className="icon-button" type="button" onClick={resetFilters} title="Reset filters">
                <RotateCcw size={18} />
             </button>
          </PageHeader>
@@ -125,7 +134,7 @@ export function ChordPage({ datasetId }: ChordPageProps): React.ReactElement {
             </label>
          </FilterPanel>
 
-         <section className="chord-layout">
+         <section className={booksPanelCollapsed ? 'chord-layout books-collapsed' : 'chord-layout'}>
             <div className="graph-frame">
                <div className="graph-toolbar">
                   <span>
@@ -134,6 +143,10 @@ export function ChordPage({ datasetId }: ChordPageProps): React.ReactElement {
                   </span>
                   <strong>{selectedBook ? selectedBook.name : 'All books'}</strong>
                </div>
+               <button className="filter-action" type="button" onClick={resetFilters}>
+                  <RotateCcw size={16} />
+                  <span>Reset filters</span>
+               </button>
                <ChordGraph
                   books={data.books}
                   matrix={filteredMatrix}
@@ -146,11 +159,22 @@ export function ChordPage({ datasetId }: ChordPageProps): React.ReactElement {
                   </div>
                ) : null}
             </div>
-            <aside className="book-legend panel">
+            <aside className={booksPanelCollapsed ? 'book-legend panel collapsed' : 'book-legend panel'}>
                <div className="panel-heading compact">
-                  <h2>Books</h2>
-                  <p>Full names remain readable here; click a book to isolate it in the chord view.</p>
+                  <div>
+                     <h2>Books</h2>
+                     <p>Click a book to isolate it in the chord view.</p>
+                  </div>
+                  <button
+                     className="icon-button compact"
+                     type="button"
+                     onClick={() => setBooksPanelCollapsed((collapsed) => !collapsed)}
+                     title={booksPanelCollapsed ? 'Expand Books panel' : 'Collapse Books panel'}
+                  >
+                     {booksPanelCollapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+                  </button>
                </div>
+               {booksPanelCollapsed ? <span className="collapsed-panel-label">Books</span> : null}
                <div className="book-legend-list">
                   {data.books.map((book) => (
                      <button
@@ -179,10 +203,10 @@ interface ChordGraphProps {
 }
 
 function ChordGraph({ books, matrix, onSelectBook, onTooltip }: ChordGraphProps): React.ReactElement {
-   const width = 900;
-   const height = 760;
-   const outerRadius = 322;
-   const innerRadius = 292;
+   const width = 1080;
+   const height = 820;
+   const outerRadius = 292;
+   const innerRadius = 264;
    const pathArc = arc<ChordGroup>().innerRadius(innerRadius).outerRadius(outerRadius);
    const chords = useMemo(
       () =>
@@ -190,6 +214,10 @@ function ChordGraph({ books, matrix, onSelectBook, onTooltip }: ChordGraphProps)
             .padAngle(0.018)
             .sortSubgroups(descending)(matrix),
       [ matrix ],
+   );
+   const labels = useMemo(
+      () => chordLabelPositions(chords.groups, books, outerRadius + 9, 430, height / 2 - 34),
+      [ books, chords.groups, height, outerRadius ],
    );
 
    return (
@@ -213,7 +241,6 @@ function ChordGraph({ books, matrix, onSelectBook, onTooltip }: ChordGraphProps)
          <g className="chord-arcs">
             {chords.groups.map((group) => {
                const book = books[group.index];
-               const labelPoint = polarPoint(outerRadius + 34, (group.startAngle + group.endAngle) / 2);
 
                return (
                   <g key={book.bookNumber}>
@@ -223,20 +250,116 @@ function ChordGraph({ books, matrix, onSelectBook, onTooltip }: ChordGraphProps)
                         className="chord-arc"
                         onClick={() => onSelectBook(book.bookNumber)}
                      />
-                     <text
-                        x={labelPoint.x}
-                        y={labelPoint.y}
-                        className="chord-label"
-                        textAnchor={labelPoint.x >= 0 ? 'start' : 'end'}
-                     >
-                  {book.bookNumber}
-               </text>
                   </g>
                );
             })}
          </g>
+         <g className="chord-labels">
+            {labels.map((label) => (
+               <g key={label.book.bookNumber} className="chord-label-group">
+                  <path
+                     className="chord-label-leader"
+                     d={`M ${label.lineStart.x} ${label.lineStart.y} C ${label.lineMid.x} ${label.lineStart.y}, ${label.lineMid.x} ${label.textY}, ${label.textX} ${label.textY}`}
+                  />
+                  <text
+                     x={label.textX}
+                     y={label.textY}
+                     className="chord-label"
+                     textAnchor={label.anchor}
+                     dominantBaseline="middle"
+                  >
+                     {label.book.name}
+                  </text>
+               </g>
+            ))}
+         </g>
       </svg>
    );
+}
+
+interface ChordLabelPosition {
+   book: Book;
+   anchor: 'start' | 'end';
+   textX: number;
+   textY: number;
+   lineStart: { x: number; y: number };
+   lineMid: { x: number; y: number };
+}
+
+function chordLabelPositions(
+   groups: ChordGroup[],
+   books: Book[],
+   startRadius: number,
+   labelX: number,
+   maxY: number,
+): ChordLabelPosition[] {
+   const rawLabels = groups
+      .filter((group) => group.value > 0)
+      .map((group) => {
+         const angle = (group.startAngle + group.endAngle) / 2;
+         const lineStart = polarPoint(startRadius, angle);
+         const side = lineStart.x >= 0 ? 'right' : 'left';
+
+         return {
+            book: books[group.index],
+            side,
+            naturalY: lineStart.y,
+            lineStart,
+         };
+      });
+
+   return ([ 'left', 'right' ] as const).flatMap((side) => {
+      const sideLabels = rawLabels
+         .filter((label) => label.side === side)
+         .sort((left, right) => left.naturalY - right.naturalY);
+      const positionedY = distributeY(sideLabels.map((label) => label.naturalY), -maxY, maxY, 17);
+      const textX = side === 'right' ? labelX : -labelX;
+      const anchor = side === 'right' ? 'start' : 'end';
+
+      return sideLabels.map((label, index) => ({
+         book: label.book,
+         anchor,
+         textX,
+         textY: positionedY[index],
+         lineStart: label.lineStart,
+         lineMid: {
+            x: side === 'right' ? labelX - 28 : -labelX + 28,
+            y: positionedY[index],
+         },
+      }));
+   });
+}
+
+function distributeY(values: number[], min: number, max: number, spacing: number): number[] {
+   if (values.length === 0) {
+      return [];
+   }
+
+   const positions = values.map((value) => Math.min(max, Math.max(min, value)));
+
+   for (let index = 1; index < positions.length; index += 1) {
+      positions[index] = Math.max(positions[index], positions[index - 1] + spacing);
+   }
+
+   const overflow = positions[positions.length - 1] - max;
+   if (overflow > 0) {
+      for (let index = 0; index < positions.length; index += 1) {
+         positions[index] -= overflow;
+      }
+   }
+
+   for (let index = positions.length - 2; index >= 0; index -= 1) {
+      positions[index] = Math.min(positions[index], positions[index + 1] - spacing);
+   }
+
+   const underflow = min - positions[0];
+   if (underflow > 0) {
+      for (let index = 0; index < positions.length; index += 1) {
+         positions[index] += underflow;
+      }
+   }
+
+   return positions;
 }
 
 function bookWeightTotals(matrix: BookMatrix): number[] {

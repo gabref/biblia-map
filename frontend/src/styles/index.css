@@ -14,6 +14,8 @@
    --line: rgba(255, 255, 255, 0.12);
    --paper-line: rgba(38, 33, 27, 0.14);
    --brass: #d1a447;
+   --outgoing: #d1a447;
+   --incoming: #6f9fe8;
    --sage: #7b9e87;
    --teal: #3f7d78;
    --blue: #5576a8;
@@ -158,6 +160,20 @@ button {
    border-radius: 8px;
 }
 
+.sidebar-credit {
+   display: grid;
+   gap: 4px;
+   margin: -12px 0 0;
+   color: var(--muted);
+   font-size: 0.78rem;
+   line-height: 1.45;
+}
+
+.sidebar-credit a {
+   color: var(--ink);
+   text-decoration-color: rgba(247, 240, 223, 0.35);
+}
+
 .main-surface {
    min-width: 0;
    padding: 34px;
@@ -219,6 +235,11 @@ button {
 
 .icon-button:hover {
    background: #27312d;
+}
+
+.icon-button.compact {
+   width: 34px;
+   height: 34px;
 }
 
 .stat-grid {
@@ -297,7 +318,8 @@ button {
 }
 
 .panel-heading.compact {
-   display: block;
+   align-items: flex-start;
+   justify-content: space-between;
 }
 
 .rank-list {
@@ -463,6 +485,10 @@ meter::-webkit-meter-optimum-value {
    gap: 16px;
 }
 
+.chord-layout.books-collapsed {
+   grid-template-columns: minmax(0, 1fr) 64px;
+}
+
 .graph-toolbar {
    display: flex;
    align-items: center;
@@ -485,7 +511,7 @@ meter::-webkit-meter-optimum-value {
 
 .chord-svg {
    width: 100%;
-   min-height: 620px;
+   min-height: 680px;
    display: block;
 }
 
@@ -513,8 +539,16 @@ meter::-webkit-meter-optimum-value {
 }
 
 .chord-label {
-   fill: var(--muted);
-   font-size: 0.68rem;
+   fill: rgba(247, 240, 223, 0.9);
+   font-size: 0.64rem;
+   font-weight: 700;
+   pointer-events: none;
+}
+
+.chord-label-leader {
+   fill: none;
+   stroke: rgba(247, 240, 223, 0.34);
+   stroke-width: 0.75;
    pointer-events: none;
 }
 
@@ -534,6 +568,32 @@ meter::-webkit-meter-optimum-value {
 .book-legend {
    max-height: 760px;
    overflow: hidden;
+}
+
+.book-legend.collapsed {
+   display: grid;
+   justify-items: center;
+   align-content: start;
+   padding: 12px 8px;
+}
+
+.book-legend.collapsed .panel-heading {
+   justify-content: center;
+   margin-bottom: 12px;
+}
+
+.book-legend.collapsed .panel-heading div,
+.book-legend.collapsed .book-legend-list {
+   display: none;
+}
+
+.collapsed-panel-label {
+   color: var(--paper-muted);
+   font-size: 0.82rem;
+   font-weight: 800;
+   letter-spacing: 0.08em;
+   text-transform: uppercase;
+   writing-mode: vertical-rl;
 }
 
 .book-legend-list {
@@ -581,6 +641,24 @@ meter::-webkit-meter-optimum-value {
    color: var(--paper-muted);
 }
 
+.filter-action {
+   display: inline-flex;
+   align-items: center;
+   gap: 8px;
+   min-height: 36px;
+   margin: 0 0 12px;
+   padding: 0 11px;
+   color: var(--muted);
+   background: rgba(255, 255, 255, 0.06);
+   border: 1px solid var(--line);
+   border-radius: 8px;
+}
+
+.filter-action:hover {
+   color: var(--ink);
+   background: rgba(255, 255, 255, 0.1);
+}
+
 .verse-layout {
    display: grid;
    grid-template-columns: minmax(0, 1fr) 340px;
@@ -602,6 +680,38 @@ meter::-webkit-meter-optimum-value {
    line-height: 1.65;
 }
 
+.direction-legend {
+   display: flex;
+   flex-wrap: wrap;
+   gap: 10px 18px;
+   margin: 0 0 12px;
+   color: var(--muted);
+   font-size: 0.86rem;
+}
+
+.direction-legend span {
+   display: inline-flex;
+   align-items: center;
+   gap: 8px;
+}
+
+.direction-swatch {
+   display: inline-block;
+   width: 32px;
+   height: 5px;
+   border-radius: 999px;
+}
+
+.direction-swatch.outgoing {
+   background: var(--outgoing);
+   box-shadow: 0 0 12px rgba(209, 164, 71, 0.5);
+}
+
+.direction-swatch.incoming {
+   background: var(--incoming);
+   box-shadow: 0 0 12px rgba(111, 159, 232, 0.5);
+}
+
 .verse-graph {
    width: 100%;
    min-height: 520px;
@@ -609,16 +719,18 @@ meter::-webkit-meter-optimum-value {
 }
 
 .verse-link {
-   stroke-width: 1.2;
-   stroke-dasharray: 4 7;
+   fill: none;
+   stroke-width: 2;
+   stroke-linecap: round;
+   opacity: 0.72;
 }
 
 .verse-link.outgoing {
-   stroke: rgba(209, 164, 71, 0.55);
+   stroke: var(--outgoing);
 }
 
 .verse-link.incoming {
-   stroke: rgba(85, 118, 168, 0.6);
+   stroke: var(--incoming);
 }
 
 .verse-node {
@@ -632,15 +744,15 @@ meter::-webkit-meter-optimum-value {
 }
 
 .verse-node.incoming {
-   fill: var(--blue);
+   fill: var(--incoming);
 }
 
 .verse-node.outgoing {
-   fill: var(--sage);
+   fill: var(--outgoing);
 }
 
 .verse-node.both {
-   fill: var(--clay);
+   fill: var(--teal);
 }
 
 .verse-node:hover,
@@ -848,9 +960,12 @@ meter::-webkit-meter-optimum-value {
       overflow-x: auto;
    }
 
-   .chord-svg,
+   .chord-svg {
+      min-width: 900px;
+   }
+
    .verse-graph {
-      min-width: 680px;
+      min-width: 760px;
    }
 
    .graph-frame {

@@ -1,4 +1,14 @@
 import { ArrowDownToLine, ArrowUpFromLine, BookOpenCheck, GitBranch, Info, Search } from 'lucide-react';
+import {
+   forceCenter,
+   forceCollide,
+   forceLink,
+   forceManyBody,
+   forceRadial,
+   forceSimulation,
+   type SimulationLinkDatum,
+   type SimulationNodeDatum,
+} from 'd3-force';
 import { useEffect, useMemo, useState } from 'react';
 
 import { ErrorState } from '../components/ErrorState';
@@ -48,6 +58,25 @@ interface GraphLink {
    direction: LinkDirection;
    kind: number;
    edge: AdjacentEdge;
+}
+
+interface ForceGraphNode extends SimulationNodeDatum {
+   verseId: number;
+   label: string;
+   depth: number;
+   incomingCount: number;
+   outgoingCount: number;
+   edges: GraphLink[];
+   selected: boolean;
+}
+
+interface ForceGraphLink extends SimulationLinkDatum<ForceGraphNode> {
+   source: number | string | ForceGraphNode;
+   target: number | string | ForceGraphNode;
+   direction: LinkDirection;
+   kind: number;
+   edge: AdjacentEdge;
+   key: string;
 }
 
 interface Neighborhood {
@@ -247,6 +276,16 @@ export function VersePage({ datasetId }: VersePageProps): React.ReactElement {
                   </strong>
                </div>
                {selectedText ? <p className="selected-verse-text">{selectedText}</p> : null}
+               <div className="direction-legend" aria-label="Reference direction color key">
+                  <span>
+                     <i className="direction-swatch outgoing" />
+                     Outgoing from selected verse
+                  </span>
+                  <span>
+                     <i className="direction-swatch incoming" />
+                     Incoming to selected verse
+                  </span>
+               </div>
                {neighborhoodState.showLoading ? (
                   <LoadingShimmer rows={4} />
                ) : (
@@ -470,84 +509,228 @@ function VerseGraph({
    selectedRelatedVerseId,
    onSelect,
 }: VerseGraphProps): React.ReactElement {
-   const positionedNodes = positionNodes(nodes);
-   const positionById = new Map(positionedNodes.map((node) => [ node.verseId, node ]));
+   const graphData = useMemo(
+      () => buildForceGraph(selectedVerse, nodes, links),
+      [ links, nodes, selectedVerse ],
+   );
+   const [renderNodes, setRenderNodes] = useState<ForceGraphNode[]>(graphData.nodes);
+   const [renderLinks, setRenderLinks] = useState<ForceGraphLink[]>(graphData.links);
+
+   useEffect(() => {
+      const simulationNodes = graphData.nodes.map((node, index) => seedForceNode(node, index));
+      const simulationLinks = graphData.links.map((link) => ({ ...link }));
+      const centerNode = simulationNodes.find((node) => node.selected);
+
+      if (centerNode) {
+         centerNode.fx = 0;
+         centerNode.fy = 0;
+      }
+
+      const simulation = forceSimulation<ForceGraphNode>(simulationNodes)
+         .force(
+            'link',
+            forceLink<ForceGraphNode, ForceGraphLink>(simulationLinks)
+               .id((node) => String(node.verseId))
+               .distance((link) => (link.direction === 'outgoing' ? 126 : 146))
+               .strength(0.48),
+         )
+         .force('charge', forceManyBody<ForceGraphNode>().strength((node) => (node.selected ? -640 : -250)))
+         .force('collide', forceCollide<ForceGraphNode>().radius((node) => nodeRadius(node) + 20))
+         .force(
+            'radial',
+            forceRadial<ForceGraphNode>(
+               (node) => (node.selected ? 0 : 118 + Math.min(node.depth, 3) * 104),
+               0,
+               0,
+            ).strength(0.46),
+         )
+         .force('center', forceCenter(0, 0))
+         .alpha(0.95)
+         .alphaDecay(0.032);
+
+      simulation.tick(12);
+      setRenderNodes([ ...simulationNodes ]);
+      setRenderLinks([ ...simulationLinks ]);
+      simulation.on('tick', () => {
+         setRenderNodes([ ...simulationNodes ]);
+         setRenderLinks([ ...simulationLinks ]);
+      });
+
+      return () => {
+         simulation.stop();
+      };
+   }, [ graphData ]);
 
    return (
-      <svg className="verse-graph" viewBox="-420 -320 840 640" role="img" aria-label="Selected verse local reference graph">
-         {links.slice(0, 220).map((link, index) => {
-            const source = link.source === selectedVerse?.jwpubVerseId ? { x: 0, y: 0 } : positionById.get(link.source);
-            const target = link.target === selectedVerse?.jwpubVerseId ? { x: 0, y: 0 } : positionById.get(link.target);
+      <svg className="verse-graph" viewBox="-480 -340 960 680" role="img" aria-label="Selected verse local reference graph">
+         <defs>
+            <marker id="arrow-outgoing" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+               <path d="M 0 0 L 10 5 L 0 10 z" fill="#d1a447" />
+            </marker>
+            <marker id="arrow-incoming" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+               <path d="M 0 0 L 10 5 L 0 10 z" fill="#6f9fe8" />
+            </marker>
+         </defs>
+         <g className="verse-link-layer">
+            {renderLinks.map((link) => {
+               const source = forceEndpoint(link.source);
+               const target = forceEndpoint(link.target);
 
-            if (!source || !target) {
-               return null;
-            }
+               if (!source || !target || source.x === undefined || source.y === undefined || target.x === undefined || target.y === undefined) {
+                  return null;
+               }
 
-            return (
-               <path
-                  key={`${link.source}-${link.target}-${index}`}
-                  d={`M ${source.x} ${source.y} L ${target.x} ${target.y}`}
-                  className={link.direction === 'outgoing' ? 'verse-link outgoing' : 'verse-link incoming'}
-               />
-            );
-         })}
-         {positionedNodes.map((node) => {
-            const active = node.verseId === selectedRelatedVerseId;
-
-            return (
-               <g key={node.verseId}>
-                  <circle
-                     cx={node.x}
-                     cy={node.y}
-                     r={active ? 24 : node.depth === 1 ? 18 : 13}
-                     className={nodeClassName(node, active)}
-                     onClick={() => onSelect(node.verseId)}
+               return (
+                  <path
+                     key={link.key}
+                     d={curvedLinkPath(source, target, link.direction)}
+                     className={link.direction === 'outgoing' ? 'verse-link outgoing' : 'verse-link incoming'}
+                     markerEnd={link.direction === 'outgoing' ? 'url(#arrow-outgoing)' : 'url(#arrow-incoming)'}
                   />
-                  <text x={node.x} y={node.y + 34} textAnchor="middle" className="verse-node-label">
-                     {shortVerseLabel(node.label)}
-                  </text>
-               </g>
-            );
-         })}
-         <circle cx={0} cy={0} r={46} className="center-node" />
-         <text x={0} y={-4} textAnchor="middle" className="center-label">
-            {selectedVerse ? selectedVerse.label.split(' ')[0] : 'Verse'}
-         </text>
-         <text x={0} y={16} textAnchor="middle" className="center-label small">
-            {selectedVerse ? selectedVerse.label.replace(`${selectedVerse.label.split(' ')[0]} `, '') : ''}
-         </text>
+               );
+            })}
+         </g>
+         <g className="verse-node-layer">
+            {renderNodes.map((node) => {
+               const active = !node.selected && node.verseId === selectedRelatedVerseId;
+               const x = node.x ?? 0;
+               const y = node.y ?? 0;
+
+               return (
+                  <g key={node.verseId} className="force-node-group" transform={`translate(${x} ${y})`}>
+                     {node.selected ? (
+                        <>
+                           <circle r={nodeRadius(node)} className="center-node" />
+                           <text y={-4} textAnchor="middle" className="center-label">
+                              {selectedVerse ? selectedVerse.label.split(' ')[0] : 'Verse'}
+                           </text>
+                           <text y={16} textAnchor="middle" className="center-label small">
+                              {selectedVerse ? selectedVerse.label.replace(`${selectedVerse.label.split(' ')[0]} `, '') : ''}
+                           </text>
+                        </>
+                     ) : (
+                        <>
+                           <circle
+                              r={active ? nodeRadius(node) + 5 : nodeRadius(node)}
+                              className={nodeClassName(node, active)}
+                              onClick={() => onSelect(node.verseId)}
+                           />
+                           <text y={nodeRadius(node) + 17} textAnchor="middle" className="verse-node-label">
+                              {shortVerseLabel(node.label)}
+                           </text>
+                        </>
+                     )}
+                  </g>
+               );
+            })}
+         </g>
       </svg>
    );
 }
 
-interface PositionedNode extends GraphNode {
-   x: number;
-   y: number;
-}
+function buildForceGraph(selectedVerse: VerseRef | null, nodes: GraphNode[], links: GraphLink[]): {
+   nodes: ForceGraphNode[];
+   links: ForceGraphLink[];
+} {
+   const nodeMap = new Map<number, ForceGraphNode>();
 
-function positionNodes(nodes: GraphNode[]): PositionedNode[] {
-   const byDepth = new Map<number, GraphNode[]>();
-
-   for (const node of nodes.slice(0, 140)) {
-      byDepth.set(node.depth, [ ...(byDepth.get(node.depth) ?? []), node ]);
+   if (selectedVerse) {
+      nodeMap.set(selectedVerse.jwpubVerseId, {
+         verseId: selectedVerse.jwpubVerseId,
+         label: selectedVerse.label,
+         depth: 0,
+         incomingCount: 0,
+         outgoingCount: 0,
+         edges: [],
+         selected: true,
+      });
    }
 
-   return Array.from(byDepth.entries()).flatMap(([ depth, depthNodes ]) => {
-      const radius = 145 + (depth - 1) * 115;
+   for (const node of nodes.slice(0, 139)) {
+      nodeMap.set(node.verseId, { ...node, selected: false });
+   }
 
-      return depthNodes.map((node, index) => {
-         const angle = (index / Math.max(depthNodes.length, 1)) * Math.PI * 2 - Math.PI / 2;
+   const graphLinks = links
+      .filter((link) => nodeMap.has(link.source) && nodeMap.has(link.target))
+      .slice(0, 280)
+      .map((link, index) => ({
+         source: link.source,
+         target: link.target,
+         direction: link.direction,
+         kind: link.kind,
+         edge: link.edge,
+         key: `${link.source}-${link.target}-${link.kind}-${index}`,
+      }));
 
-         return {
-            ...node,
-            x: Math.cos(angle) * radius,
-            y: Math.sin(angle) * radius,
-         };
-      });
-   });
+   for (const link of graphLinks) {
+      const source = nodeMap.get(Number(link.source));
+      const target = nodeMap.get(Number(link.target));
+
+      if (source?.selected) {
+         source.outgoingCount += link.direction === 'outgoing' ? 1 : 0;
+         source.incomingCount += link.direction === 'incoming' ? 1 : 0;
+      }
+
+      if (target?.selected) {
+         target.outgoingCount += link.direction === 'outgoing' ? 1 : 0;
+         target.incomingCount += link.direction === 'incoming' ? 1 : 0;
+      }
+   }
+
+   return {
+      nodes: Array.from(nodeMap.values()),
+      links: graphLinks,
+   };
 }
 
-function nodeClassName(node: GraphNode, active: boolean): string {
+function seedForceNode(node: ForceGraphNode, index: number): ForceGraphNode {
+   if (node.selected) {
+      return { ...node, x: 0, y: 0, fx: 0, fy: 0 };
+   }
+
+   const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+   const radius = 120 + Math.min(node.depth, 3) * 96;
+   const angle = index * goldenAngle;
+
+   return {
+      ...node,
+      x: Math.cos(angle) * radius,
+      y: Math.sin(angle) * radius,
+   };
+}
+
+function forceEndpoint(endpoint: number | string | ForceGraphNode | undefined): ForceGraphNode | null {
+   if (typeof endpoint === 'object' && endpoint !== null) {
+      return endpoint;
+   }
+
+   return null;
+}
+
+function curvedLinkPath(source: ForceGraphNode, target: ForceGraphNode, direction: LinkDirection): string {
+   const sourceX = source.x ?? 0;
+   const sourceY = source.y ?? 0;
+   const targetX = target.x ?? 0;
+   const targetY = target.y ?? 0;
+   const dx = targetX - sourceX;
+   const dy = targetY - sourceY;
+   const distance = Math.max(Math.hypot(dx, dy), 1);
+   const bend = Math.min(44, distance * 0.22) * (direction === 'outgoing' ? 1 : -1);
+   const controlX = (sourceX + targetX) / 2 + (-dy / distance) * bend;
+   const controlY = (sourceY + targetY) / 2 + (dx / distance) * bend;
+
+   return `M ${sourceX} ${sourceY} Q ${controlX} ${controlY} ${targetX} ${targetY}`;
+}
+
+function nodeRadius(node: Pick<ForceGraphNode, 'depth' | 'edges' | 'selected'>): number {
+   if (node.selected) {
+      return 47;
+   }
+
+   return Math.min(27, 12 + Math.max(0, 4 - node.depth) * 2 + Math.sqrt(node.edges.length) * 2);
+}
+
+function nodeClassName(node: Pick<ForceGraphNode, 'incomingCount' | 'outgoingCount'>, active: boolean): string {
    const directionClass = node.incomingCount > 0 && node.outgoingCount > 0
       ? 'both'
       : node.incomingCount > 0
@@ -682,19 +865,28 @@ export function buildRelatedNodes({
    }
 
    const bucket = adjacency[String(selectedVerseId)];
-   const edges =
-      direction === 'incoming'
-         ? ((bucket as { incoming?: AdjacentEdge[] } | undefined)?.incoming ?? [])
-         : ((bucket as { outgoing?: AdjacentEdge[] } | undefined)?.outgoing ?? []);
+   const incomingEdges = ((bucket as { incoming?: AdjacentEdge[] } | undefined)?.incoming ?? []).map((edge) => ({
+      edge,
+      direction: 'incoming' as const,
+   }));
+   const outgoingEdges = ((bucket as { outgoing?: AdjacentEdge[] } | undefined)?.outgoing ?? []).map((edge) => ({
+      edge,
+      direction: 'outgoing' as const,
+   }));
+   const edges = direction === 'incoming'
+      ? incomingEdges
+      : direction === 'outgoing'
+         ? outgoingEdges
+         : [ ...outgoingEdges, ...incomingEdges ];
    const kindCode = edgeKindCode(edgeKind);
    const grouped = new Map<number, AdjacentEdge[]>();
 
-   for (const edge of edges) {
+   for (const { edge, direction: edgeDirection } of edges) {
       if (kindCode !== null && edge.kind !== kindCode) {
          continue;
       }
 
-      const relatedVerseId = direction === 'incoming' ? edge.source : edge.targetStart;
+      const relatedVerseId = edgeDirection === 'incoming' ? edge.source : edge.targetStart;
       const existing = grouped.get(relatedVerseId) ?? [];
       existing.push(edge);
       grouped.set(relatedVerseId, existing);

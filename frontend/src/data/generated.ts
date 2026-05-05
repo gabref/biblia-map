@@ -3,47 +3,57 @@ import type {
    BookMatrix,
    Chapter,
    DatasetManifest,
+   DatasetRegistryEntry,
    EdgeKindFilter,
    SourceAdjacency,
    StatsSummary,
    TargetAdjacency,
+   VerseTextBook,
    VerseIndex,
 } from '../types/generated';
 
-const datasetBasePath = '/generated/nwtsty';
+const generatedBasePath = '/generated';
 
-export async function loadManifest(): Promise<DatasetManifest> {
-   return loadGeneratedJson<DatasetManifest>('manifest.json');
+export async function loadDatasets(): Promise<DatasetRegistryEntry[]> {
+   return loadGeneratedJson<DatasetRegistryEntry[]>('datasets.json');
 }
 
-export async function loadBooks(): Promise<Book[]> {
-   return loadGeneratedJson<Book[]>('books.json');
+export async function loadManifest(datasetId: string): Promise<DatasetManifest> {
+   return loadDatasetJson<DatasetManifest>(datasetId, 'manifest.json');
 }
 
-export async function loadChapters(): Promise<Chapter[]> {
-   return loadGeneratedJson<Chapter[]>('chapters.json');
+export async function loadBooks(datasetId: string): Promise<Book[]> {
+   return loadDatasetJson<Book[]>(datasetId, 'books.json');
 }
 
-export async function loadVerseIndex(): Promise<VerseIndex> {
-   return loadGeneratedJson<VerseIndex>('verse-index.json');
+export async function loadChapters(datasetId: string): Promise<Chapter[]> {
+   return loadDatasetJson<Chapter[]>(datasetId, 'chapters.json');
 }
 
-export async function loadStatsSummary(): Promise<StatsSummary> {
-   return loadGeneratedJson<StatsSummary>('stats.summary.json');
+export async function loadVerseIndex(datasetId: string): Promise<VerseIndex> {
+   return loadDatasetJson<VerseIndex>(datasetId, 'verse-index.json');
 }
 
-export async function loadBookMatrix(edgeKind: EdgeKindFilter): Promise<BookMatrix> {
+export async function loadStatsSummary(datasetId: string): Promise<StatsSummary> {
+   return loadDatasetJson<StatsSummary>(datasetId, 'stats.summary.json');
+}
+
+export async function loadBookMatrix(datasetId: string, edgeKind: EdgeKindFilter): Promise<BookMatrix> {
    const matrixName = edgeKind === 'combined' ? 'combined' : edgeKind === 'crossrefs' ? 'crossrefs' : 'study-notes';
 
-   return loadGeneratedJson<BookMatrix>(`matrices/book.${matrixName}.json`);
+   return loadDatasetJson<BookMatrix>(datasetId, `matrices/book.${matrixName}.json`);
 }
 
-export async function loadSourceAdjacency(book: Book): Promise<SourceAdjacency> {
-   return loadGeneratedJson<SourceAdjacency>(`adjacency/source/${bookFileName(book)}`);
+export async function loadSourceAdjacency(datasetId: string, book: Book): Promise<SourceAdjacency> {
+   return loadDatasetJson<SourceAdjacency>(datasetId, `adjacency/source/${bookFileName(book)}`);
 }
 
-export async function loadTargetAdjacency(book: Book): Promise<TargetAdjacency> {
-   return loadGeneratedJson<TargetAdjacency>(`adjacency/target/${bookFileName(book)}`);
+export async function loadTargetAdjacency(datasetId: string, book: Book): Promise<TargetAdjacency> {
+   return loadDatasetJson<TargetAdjacency>(datasetId, `adjacency/target/${bookFileName(book)}`);
+}
+
+export async function loadVerseTextBook(datasetId: string, book: Book): Promise<VerseTextBook> {
+   return loadDatasetJson<VerseTextBook>(datasetId, `verse-text/${bookFileName(book)}`);
 }
 
 export function bookFileName(book: Pick<Book, 'bookNumber' | 'slug'>): string {
@@ -61,8 +71,12 @@ export function edgeKindCode(edgeKind: EdgeKindFilter): number | null {
    }
 }
 
+async function loadDatasetJson<T>(datasetId: string, relativePath: string): Promise<T> {
+   return loadGeneratedJson<T>(`${datasetId}/${relativePath}`);
+}
+
 async function loadGeneratedJson<T>(relativePath: string): Promise<T> {
-   const response = await fetch(`${datasetBasePath}/${relativePath}`);
+   const response = await fetch(`${generatedBasePath}/${relativePath}`);
 
    if (!response.ok) {
       throw new Error(`Generated data file failed to load: ${relativePath}`);

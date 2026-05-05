@@ -134,13 +134,28 @@ button {
    border-radius: 8px;
 }
 
-.dataset-badge strong,
-.dataset-badge small {
+.dataset-badge label,
+.dataset-badge span {
    display: block;
+   min-width: 0;
 }
 
-.dataset-badge strong {
+.dataset-badge span {
+   color: var(--muted);
+   font-size: 0.76rem;
+   font-weight: 700;
+   text-transform: uppercase;
+}
+
+.dataset-badge select {
+   width: 100%;
+   max-width: 190px;
+   min-height: 36px;
+   margin-top: 5px;
    color: var(--ink);
+   background: var(--surface-2);
+   border: 1px solid var(--line);
+   border-radius: 8px;
 }
 
 .main-surface {
@@ -264,7 +279,7 @@ button {
 
 .panel-heading {
    display: flex;
-   align-items: center;
+   align-items: flex-start;
    gap: 10px;
    margin-bottom: 16px;
 }
@@ -272,6 +287,17 @@ button {
 .panel-heading h2 {
    margin: 0;
    font-size: 1.05rem;
+}
+
+.panel-heading p {
+   margin: 4px 0 0;
+   color: var(--paper-muted);
+   font-size: 0.88rem;
+   line-height: 1.45;
+}
+
+.panel-heading.compact {
+   display: block;
 }
 
 .rank-list {
@@ -431,6 +457,12 @@ meter::-webkit-meter-optimum-value {
    background: rgba(14, 17, 16, 0.72);
 }
 
+.chord-layout {
+   display: grid;
+   grid-template-columns: minmax(0, 1fr) 300px;
+   gap: 16px;
+}
+
 .graph-toolbar {
    display: flex;
    align-items: center;
@@ -499,6 +531,56 @@ meter::-webkit-meter-optimum-value {
    font-size: 0.88rem;
 }
 
+.book-legend {
+   max-height: 760px;
+   overflow: hidden;
+}
+
+.book-legend-list {
+   display: grid;
+   gap: 6px;
+   max-height: 650px;
+   overflow: auto;
+   padding-right: 4px;
+}
+
+.book-legend-list button {
+   display: grid;
+   grid-template-columns: 12px minmax(0, 1fr) auto;
+   gap: 8px;
+   align-items: center;
+   min-height: 34px;
+   padding: 6px 8px;
+   color: var(--paper-ink);
+   text-align: left;
+   background: transparent;
+   border: 1px solid transparent;
+   border-radius: 8px;
+}
+
+.book-legend-list button:hover,
+.book-legend-list button.active {
+   background: rgba(32, 29, 24, 0.08);
+   border-color: var(--paper-line);
+}
+
+.book-legend-list span {
+   width: 10px;
+   height: 10px;
+   border-radius: 999px;
+}
+
+.book-legend-list strong {
+   overflow: hidden;
+   font-size: 0.9rem;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+}
+
+.book-legend-list small {
+   color: var(--paper-muted);
+}
+
 .verse-layout {
    display: grid;
    grid-template-columns: minmax(0, 1fr) 340px;
@@ -507,6 +589,17 @@ meter::-webkit-meter-optimum-value {
 
 .verse-frame {
    min-height: 600px;
+}
+
+.selected-verse-text {
+   max-width: 900px;
+   margin: 0 0 12px;
+   padding: 12px 14px;
+   color: var(--ink);
+   background: rgba(255, 255, 255, 0.07);
+   border: 1px solid var(--line);
+   border-radius: 8px;
+   line-height: 1.65;
 }
 
 .verse-graph {
@@ -536,6 +629,18 @@ meter::-webkit-meter-optimum-value {
    transition:
       r 0.16s ease,
       fill 0.16s ease;
+}
+
+.verse-node.incoming {
+   fill: var(--blue);
+}
+
+.verse-node.outgoing {
+   fill: var(--sage);
+}
+
+.verse-node.both {
+   fill: var(--clay);
 }
 
 .verse-node:hover,
@@ -619,6 +724,15 @@ meter::-webkit-meter-optimum-value {
    line-height: 1.6;
 }
 
+.verse-copy {
+   margin: 0;
+   padding: 12px;
+   color: var(--paper-ink);
+   background: rgba(32, 29, 24, 0.08);
+   border-radius: 8px;
+   line-height: 1.7;
+}
+
 .empty-state,
 .error-state {
    display: grid;
@@ -694,8 +808,14 @@ meter::-webkit-meter-optimum-value {
    .overview-grid,
    .triple-list,
    .method-grid,
+   .chord-layout,
    .verse-layout {
       grid-template-columns: 1fr;
+   }
+
+   .book-legend,
+   .book-legend-list {
+      max-height: none;
    }
 }
 
@@ -730,10 +850,23 @@ meter::-webkit-meter-optimum-value {
 
    .chord-svg,
    .verse-graph {
-      min-width: 720px;
+      min-width: 680px;
    }
 
    .graph-frame {
       overflow-x: auto;
+   }
+
+   .metadata-list div {
+      grid-template-columns: 1fr;
+      gap: 4px;
+   }
+
+   .graph-toolbar {
+      display: grid;
+   }
+
+   .graph-toolbar strong {
+      justify-self: start;
    }
 }

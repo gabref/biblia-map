@@ -7,14 +7,18 @@ import { loadManifest, loadStatsSummary } from '../data/generated';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { formatNumber } from '../utils/format';
 
-export function AboutPage(): React.ReactElement {
+interface AboutPageProps {
+   datasetId: string;
+}
+
+export function AboutPage({ datasetId }: AboutPageProps): React.ReactElement {
    const { data, error, showLoading } = useAsyncData(
       async () => {
-         const [ manifest, summary ] = await Promise.all([ loadManifest(), loadStatsSummary() ]);
+         const [ manifest, summary ] = await Promise.all([ loadManifest(datasetId), loadStatsSummary(datasetId) ]);
 
          return { manifest, summary };
       },
-      [],
+      [ datasetId ],
    );
 
    if (error) {

@@ -34,7 +34,11 @@ const scopeOptions = [
    { value: 'nt', label: 'New' },
 ] satisfies Array<{ value: ChordScope; label: string }>;
 
-export function ChordPage(): React.ReactElement {
+interface ChordPageProps {
+   datasetId: string;
+}
+
+export function ChordPage({ datasetId }: ChordPageProps): React.ReactElement {
    const [edgeKind, setEdgeKind] = useState<EdgeKindFilter>('combined');
    const [scope, setScope] = useState<ChordScope>('all');
    const [minWeight, setMinWeight] = useState(25);
@@ -43,11 +47,11 @@ export function ChordPage(): React.ReactElement {
    const [tooltip, setTooltip] = useState<TooltipState | null>(null);
    const { data, error, showLoading } = useAsyncData(
       async () => {
-         const [ books, matrix ] = await Promise.all([ loadBooks(), loadBookMatrix(edgeKind) ]);
+         const [ books, matrix ] = await Promise.all([ loadBooks(datasetId), loadBookMatrix(datasetId, edgeKind) ]);
 
          return { books, matrix };
       },
-      [ edgeKind ],
+      [ datasetId, edgeKind ],
    );
 
    const filteredMatrix = useMemo(() => {
@@ -82,6 +86,7 @@ export function ChordPage(): React.ReactElement {
 
    const visibleTotal = matrixTotal(filteredMatrix);
    const selectedBook = selectedBookNumber ? data.books[selectedBookNumber - 1] : null;
+   const bookWeights = bookWeightTotals(filteredMatrix);
 
    return (
       <div className="page-stack">
@@ -120,25 +125,47 @@ export function ChordPage(): React.ReactElement {
             </label>
          </FilterPanel>
 
-         <section className="graph-frame">
-            <div className="graph-toolbar">
-               <span>
-                  <SlidersHorizontal size={17} />
-                  {formatNumber(visibleTotal)} visible references
-               </span>
-               <strong>{selectedBook ? selectedBook.name : 'All books'}</strong>
-            </div>
-            <ChordGraph
-               books={data.books}
-               matrix={filteredMatrix}
-               onSelectBook={setSelectedBookNumber}
-               onTooltip={setTooltip}
-            />
-            {tooltip ? (
-               <div className="graph-tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
-                  {tooltip.label}
+         <section className="chord-layout">
+            <div className="graph-frame">
+               <div className="graph-toolbar">
+                  <span>
+                     <SlidersHorizontal size={17} />
+                     {formatNumber(visibleTotal)} visible references
+                  </span>
+                  <strong>{selectedBook ? selectedBook.name : 'All books'}</strong>
                </div>
-            ) : null}
+               <ChordGraph
+                  books={data.books}
+                  matrix={filteredMatrix}
+                  onSelectBook={setSelectedBookNumber}
+                  onTooltip={setTooltip}
+               />
+               {tooltip ? (
+                  <div className="graph-tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
+                     {tooltip.label}
+                  </div>
+               ) : null}
+            </div>
+            <aside className="book-legend panel">
+               <div className="panel-heading compact">
+                  <h2>Books</h2>
+                  <p>Full names remain readable here; click a book to isolate it in the chord view.</p>
+               </div>
+               <div className="book-legend-list">
+                  {data.books.map((book) => (
+                     <button
+                        key={book.bookNumber}
+                        type="button"
+                        className={book.bookNumber === selectedBookNumber ? 'active' : ''}
+                        onClick={() => setSelectedBookNumber(book.bookNumber)}
+                     >
+                        <span style={{ background: bookColor(book) }} />
+                        <strong>{book.name}</strong>
+                        <small>{formatNumber(bookWeights[book.bookNumber - 1] ?? 0)}</small>
+                     </button>
+                  ))}
+               </div>
+            </aside>
          </section>
       </div>
    );
@@ -166,8 +193,12 @@ function ChordGraph({ books, matrix, onSelectBook, onTooltip }: ChordGraphProps)
    );
 
    return (
-      <svg className="chord-svg" viewBox={`${-width / 2} ${-height / 2} ${width} ${height}`} role="img">
-         <title>Book-to-book chord diagram</title>
+      <svg
+         className="chord-svg"
+         viewBox={`${-width / 2} ${-height / 2} ${width} ${height}`}
+         role="img"
+         aria-label="Book-to-book chord diagram"
+      >
          <g className="chord-links">
             {chords.map((link) => (
                <ChordLink
@@ -191,23 +222,30 @@ function ChordGraph({ books, matrix, onSelectBook, onTooltip }: ChordGraphProps)
                         fill={bookColor(book)}
                         className="chord-arc"
                         onClick={() => onSelectBook(book.bookNumber)}
-                     >
-                        <title>{book.name}</title>
-                     </path>
+                     />
                      <text
                         x={labelPoint.x}
                         y={labelPoint.y}
                         className="chord-label"
                         textAnchor={labelPoint.x >= 0 ? 'start' : 'end'}
                      >
-                        {book.shortName}
-                     </text>
+                  {book.bookNumber}
+               </text>
                   </g>
                );
             })}
          </g>
       </svg>
    );
+}
+
+function bookWeightTotals(matrix: BookMatrix): number[] {
+   return matrix.map((row, index) => {
+      const outgoing = row.reduce((total, weight) => total + weight, 0);
+      const incoming = matrix.reduce((total, sourceRow) => total + sourceRow[index], 0);
+
+      return outgoing + incoming;
+   });
 }
 
 interface ChordLinkProps {

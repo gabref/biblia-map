@@ -10,9 +10,11 @@ import {
    edgeKindCode,
    loadBooks,
    loadChapters,
+   loadManifest,
    loadSourceAdjacency,
    loadTargetAdjacency,
    loadVerseIndex,
+   loadVerseTextBook,
 } from '../data/generated';
 import { useAsyncData } from '../hooks/useAsyncData';
 import type {
@@ -23,15 +25,38 @@ import type {
    EdgeKindFilter,
    SourceAdjacency,
    TargetAdjacency,
+   VerseIndex,
    VerseRef,
+   VerseTextBook,
 } from '../types/generated';
 import { edgeKindLabel, formatNumber } from '../utils/format';
 
-interface RelatedNode {
+type LinkDirection = 'outgoing' | 'incoming';
+
+interface GraphNode {
    verseId: number;
    label: string;
-   count: number;
-   edges: AdjacentEdge[];
+   depth: number;
+   incomingCount: number;
+   outgoingCount: number;
+   edges: GraphLink[];
+}
+
+interface GraphLink {
+   source: number;
+   target: number;
+   direction: LinkDirection;
+   kind: number;
+   edge: AdjacentEdge;
+}
+
+interface Neighborhood {
+   nodes: GraphNode[];
+   links: GraphLink[];
+}
+
+interface VersePageProps {
+   datasetId: string;
 }
 
 const edgeKindOptions = [
@@ -41,35 +66,31 @@ const edgeKindOptions = [
 ] satisfies Array<{ value: EdgeKindFilter; label: string }>;
 
 const directionOptions = [
+   { value: 'all', label: 'All' },
    { value: 'outgoing', label: 'Outgoing' },
    { value: 'incoming', label: 'Incoming' },
 ] satisfies Array<{ value: DirectionMode; label: string }>;
 
-export function VersePage(): React.ReactElement {
+export function VersePage({ datasetId }: VersePageProps): React.ReactElement {
    const [bookNumber, setBookNumber] = useState(45);
    const [chapterNumber, setChapterNumber] = useState(12);
    const [verseNumber, setVerseNumber] = useState(12);
    const [edgeKind, setEdgeKind] = useState<EdgeKindFilter>('combined');
-   const [direction, setDirection] = useState<DirectionMode>('outgoing');
+   const [direction, setDirection] = useState<DirectionMode>('all');
+   const [layers, setLayers] = useState(1);
    const [selectedRelatedVerseId, setSelectedRelatedVerseId] = useState<number | null>(null);
    const baseDataState = useAsyncData(
       async () => {
-         const [ books, chapters, verseIndex ] = await Promise.all([ loadBooks(), loadChapters(), loadVerseIndex() ]);
+         const [ manifest, books, chapters, verseIndex ] = await Promise.all([
+            loadManifest(datasetId),
+            loadBooks(datasetId),
+            loadChapters(datasetId),
+            loadVerseIndex(datasetId),
+         ]);
 
-         return { books, chapters, verseIndex };
+         return { manifest, books, chapters, verseIndex };
       },
-      [],
-   );
-   const selectedBook = baseDataState.data?.books.find((book) => book.bookNumber === bookNumber) ?? null;
-   const adjacencyState = useAsyncData(
-      async () => {
-         if (!selectedBook) {
-            return null;
-         }
-
-         return direction === 'outgoing' ? loadSourceAdjacency(selectedBook) : loadTargetAdjacency(selectedBook);
-      },
-      [ selectedBook?.bookNumber, direction ],
+      [ datasetId ],
    );
    const chaptersForBook = useMemo(
       () => baseDataState.data?.chapters.filter((chapter) => chapter.bookNumber === bookNumber) ?? [],
@@ -82,20 +103,36 @@ export function VersePage(): React.ReactElement {
    const selectedVerseRef = selectedVerse
       ? baseDataState.data?.verseIndex[String(selectedVerse.jwpubVerseId)] ?? null
       : null;
-   const relatedNodes = useMemo(() => {
-      if (!selectedVerse || !baseDataState.data || !adjacencyState.data) {
-         return [];
-      }
+   const neighborhoodState = useAsyncData(
+      async () => {
+         if (!baseDataState.data || !selectedVerseRef) {
+            return { neighborhood: { nodes: [], links: [] }, verseTextByBook: new Map<number, VerseTextBook>() };
+         }
 
-      return buildRelatedNodes({
-         selectedVerseId: selectedVerse.jwpubVerseId,
-         adjacency: adjacencyState.data,
-         direction,
-         edgeKind,
-         verseIndex: baseDataState.data.verseIndex,
-      });
-   }, [ adjacencyState.data, baseDataState.data, direction, edgeKind, selectedVerse ]);
-   const selectedRelated = relatedNodes.find((node) => node.verseId === selectedRelatedVerseId) ?? relatedNodes[0] ?? null;
+         const neighborhood = await loadNeighborhood({
+            datasetId,
+            selectedVerseId: selectedVerseRef.jwpubVerseId,
+            direction,
+            edgeKind,
+            layers,
+            books: baseDataState.data.books,
+            verseIndex: baseDataState.data.verseIndex,
+         });
+         const verseTextByBook = await loadVerseTextForNeighborhood(
+            datasetId,
+            baseDataState.data.books,
+            baseDataState.data.verseIndex,
+            [ selectedVerseRef.jwpubVerseId, ...neighborhood.nodes.map((node) => node.verseId) ],
+            baseDataState.data.manifest.hasVerseText,
+         );
+
+         return { neighborhood, verseTextByBook };
+      },
+      [ baseDataState.data, datasetId, direction, edgeKind, layers, selectedVerseRef?.jwpubVerseId ],
+   );
+   const nodes = neighborhoodState.data?.neighborhood.nodes ?? [];
+   const links = neighborhoodState.data?.neighborhood.links ?? [];
+   const selectedRelated = nodes.find((node) => node.verseId === selectedRelatedVerseId) ?? nodes[0] ?? null;
 
    useEffect(() => {
       if (!selectedChapter) {
@@ -115,26 +152,30 @@ export function VersePage(): React.ReactElement {
 
    useEffect(() => {
       setSelectedRelatedVerseId(null);
-   }, [ selectedVerse?.jwpubVerseId, direction, edgeKind ]);
+   }, [ selectedVerse?.jwpubVerseId, direction, edgeKind, layers ]);
 
    if (baseDataState.error) {
       return <ErrorState title="Verse data is unavailable" error={baseDataState.error} />;
    }
 
-   if (adjacencyState.error) {
-      return <ErrorState title="Adjacency data is unavailable" error={adjacencyState.error} />;
+   if (neighborhoodState.error) {
+      return <ErrorState title="Adjacency data is unavailable" error={neighborhoodState.error} />;
    }
 
    if (!baseDataState.data || baseDataState.showLoading) {
       return <LoadingShimmer rows={7} />;
    }
 
+   const selectedText = selectedVerseRef
+      ? lookupVerseText(neighborhoodState.data?.verseTextByBook, selectedVerseRef, baseDataState.data.books)
+      : null;
+
    return (
       <div className="page-stack">
          <PageHeader
             eyebrow="Local graph"
             title="Verse explorer"
-            description="Select one verse and load only that book's adjacency file for incoming or outgoing references."
+            description="Select one verse and load only the adjacency files needed for the visible neighborhood."
          />
 
          <FilterPanel title="Verse selection">
@@ -180,6 +221,18 @@ export function VersePage(): React.ReactElement {
 
             <SegmentedControl label="Direction" options={directionOptions} value={direction} onChange={setDirection} />
             <SegmentedControl label="Reference type" options={edgeKindOptions} value={edgeKind} onChange={setEdgeKind} />
+            <label className="range-control compact-range">
+               <span>Layers</span>
+               <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={1}
+                  value={layers}
+                  onChange={(event) => setLayers(Number(event.target.value))}
+               />
+               <strong>{layers}</strong>
+            </label>
          </FilterPanel>
 
          <section className="verse-layout">
@@ -189,15 +242,18 @@ export function VersePage(): React.ReactElement {
                      <Search size={17} />
                      {selectedVerseRef?.label ?? 'Select a verse'}
                   </span>
-                  <strong>{formatNumber(relatedNodes.reduce((total, node) => total + node.count, 0))} references</strong>
+                  <strong>
+                     {formatNumber(links.length)} links across {formatNumber(nodes.length)} verses
+                  </strong>
                </div>
-               {adjacencyState.showLoading ? (
+               {selectedText ? <p className="selected-verse-text">{selectedText}</p> : null}
+               {neighborhoodState.showLoading ? (
                   <LoadingShimmer rows={4} />
                ) : (
                   <VerseGraph
                      selectedVerse={selectedVerseRef}
-                     relatedNodes={relatedNodes}
-                     direction={direction}
+                     nodes={nodes}
+                     links={links}
                      selectedRelatedVerseId={selectedRelated?.verseId ?? null}
                      onSelect={setSelectedRelatedVerseId}
                   />
@@ -207,13 +263,18 @@ export function VersePage(): React.ReactElement {
             <aside className="side-panel">
                <div className="panel-heading">
                   <Info size={20} />
-                  <h2>Connection detail</h2>
+                  <div>
+                     <h2>Connection detail</h2>
+                     <p>Reference direction, type, and verse text for the selected node.</p>
+                  </div>
                </div>
                <ConnectionDetail
                   selectedVerse={selectedVerseRef}
                   relatedNode={selectedRelated}
-                  direction={direction}
                   books={baseDataState.data.books}
+                  verseIndex={baseDataState.data.verseIndex}
+                  verseTextByBook={neighborhoodState.data?.verseTextByBook}
+                  hasVerseText={baseDataState.data.manifest.hasVerseText}
                />
             </aside>
          </section>
@@ -221,101 +282,234 @@ export function VersePage(): React.ReactElement {
    );
 }
 
-interface BuildRelatedNodesInput {
+interface LoadNeighborhoodInput {
+   datasetId: string;
    selectedVerseId: number;
-   adjacency: SourceAdjacency | TargetAdjacency | null;
    direction: DirectionMode;
    edgeKind: EdgeKindFilter;
-   verseIndex: Record<string, VerseRef>;
+   layers: number;
+   books: Book[];
+   verseIndex: VerseIndex;
 }
 
-export function buildRelatedNodes({
+async function loadNeighborhood({
+   datasetId,
    selectedVerseId,
-   adjacency,
    direction,
    edgeKind,
+   layers,
+   books,
    verseIndex,
-}: BuildRelatedNodesInput): RelatedNode[] {
-   if (!adjacency) {
-      return [];
-   }
-
-   const bucket = adjacency[String(selectedVerseId)];
-   const edges =
-      direction === 'outgoing'
-         ? ((bucket as { outgoing?: AdjacentEdge[] } | undefined)?.outgoing ?? [])
-         : ((bucket as { incoming?: AdjacentEdge[] } | undefined)?.incoming ?? []);
+}: LoadNeighborhoodInput): Promise<Neighborhood> {
+   const sourceCache = new Map<number, SourceAdjacency>();
+   const targetCache = new Map<number, TargetAdjacency>();
+   const nodes = new Map<number, GraphNode>();
+   const links: GraphLink[] = [];
+   let frontier = new Set([ selectedVerseId ]);
+   const seen = new Set([ selectedVerseId ]);
    const kindCode = edgeKindCode(edgeKind);
-   const grouped = new Map<number, AdjacentEdge[]>();
+   const maxNodes = 140;
 
-   for (const edge of edges) {
-      if (kindCode !== null && edge.kind !== kindCode) {
-         continue;
+   for (let depth = 1; depth <= layers && frontier.size > 0 && nodes.size < maxNodes; depth += 1) {
+      const nextFrontier = new Set<number>();
+      const sourceAdjacency = direction !== 'incoming'
+         ? await loadAdjacencyForFrontier(datasetId, books, verseIndex, frontier, sourceCache, 'source')
+         : new Map<number, SourceAdjacency>();
+      const targetAdjacency = direction !== 'outgoing'
+         ? await loadAdjacencyForFrontier(datasetId, books, verseIndex, frontier, targetCache, 'target')
+         : new Map<number, TargetAdjacency>();
+
+      for (const verseId of frontier) {
+         if (direction !== 'incoming') {
+            const outgoing = sourceAdjacency.get(bookNumberForVerse(verseIndex, verseId))?.[String(verseId)]?.outgoing ?? [];
+            collectLinks(outgoing, 'outgoing', verseId, depth);
+         }
+
+         if (direction !== 'outgoing') {
+            const incoming = targetAdjacency.get(bookNumberForVerse(verseIndex, verseId))?.[String(verseId)]?.incoming ?? [];
+            collectLinks(incoming, 'incoming', verseId, depth);
+         }
       }
 
-      const relatedVerseId = direction === 'outgoing' ? edge.targetStart : edge.source;
-      const existing = grouped.get(relatedVerseId) ?? [];
-      existing.push(edge);
-      grouped.set(relatedVerseId, existing);
+      frontier = nextFrontier;
+
+      function collectLinks(edges: AdjacentEdge[], linkDirection: LinkDirection, centerVerseId: number, depth: number): void {
+         for (const edge of edges) {
+            if (kindCode !== null && edge.kind !== kindCode) {
+               continue;
+            }
+
+            const relatedVerseId = linkDirection === 'outgoing' ? edge.targetStart : edge.source;
+            const link: GraphLink = {
+               source: linkDirection === 'outgoing' ? centerVerseId : relatedVerseId,
+               target: linkDirection === 'outgoing' ? relatedVerseId : centerVerseId,
+               direction: linkDirection,
+               kind: edge.kind,
+               edge,
+            };
+            links.push(link);
+            upsertNode(nodes, relatedVerseId, depth, verseIndex, link);
+
+            if (!seen.has(relatedVerseId) && nodes.size < maxNodes) {
+               seen.add(relatedVerseId);
+               nextFrontier.add(relatedVerseId);
+            }
+         }
+      }
    }
 
-   return Array.from(grouped.entries())
-      .map(([ verseId, nodeEdges ]) => ({
-         verseId,
-         label: verseIndex[String(verseId)]?.label ?? `Verse ${verseId}`,
-         count: nodeEdges.length,
-         edges: nodeEdges,
-      }))
-      .sort((left, right) => right.count - left.count || left.verseId - right.verseId)
-      .slice(0, 36);
+   return {
+      nodes: Array.from(nodes.values()).sort((left, right) => left.depth - right.depth || right.edges.length - left.edges.length),
+      links,
+   };
+}
+
+async function loadAdjacencyForFrontier<TMode extends 'source' | 'target'>(
+   datasetId: string,
+   books: Book[],
+   verseIndex: VerseIndex,
+   frontier: Set<number>,
+   cache: TMode extends 'source' ? Map<number, SourceAdjacency> : Map<number, TargetAdjacency>,
+   mode: TMode,
+): Promise<TMode extends 'source' ? Map<number, SourceAdjacency> : Map<number, TargetAdjacency>> {
+   const bookNumbers = Array.from(frontier).map((verseId) => bookNumberForVerse(verseIndex, verseId));
+   const uniqueBookNumbers = Array.from(new Set(bookNumbers));
+
+   await Promise.all(
+      uniqueBookNumbers.map(async (bookNumber) => {
+         if (cache.has(bookNumber)) {
+            return;
+         }
+
+         const book = books[bookNumber - 1];
+         if (!book) {
+            return;
+         }
+
+         const adjacency = mode === 'source'
+            ? await loadSourceAdjacency(datasetId, book)
+            : await loadTargetAdjacency(datasetId, book);
+         cache.set(bookNumber, adjacency as never);
+      }),
+   );
+
+   return cache;
+}
+
+function upsertNode(
+   nodes: Map<number, GraphNode>,
+   verseId: number,
+   depth: number,
+   verseIndex: VerseIndex,
+   link: GraphLink,
+): void {
+   const existing = nodes.get(verseId);
+
+   if (existing) {
+      existing.depth = Math.min(existing.depth, depth);
+      existing.incomingCount += link.direction === 'incoming' ? 1 : 0;
+      existing.outgoingCount += link.direction === 'outgoing' ? 1 : 0;
+      existing.edges.push(link);
+      return;
+   }
+
+   nodes.set(verseId, {
+      verseId,
+      label: verseIndex[String(verseId)]?.label ?? `Verse ${verseId}`,
+      depth,
+      incomingCount: link.direction === 'incoming' ? 1 : 0,
+      outgoingCount: link.direction === 'outgoing' ? 1 : 0,
+      edges: [ link ],
+   });
+}
+
+function bookNumberForVerse(verseIndex: VerseIndex, verseId: number): number {
+   return verseIndex[String(verseId)]?.bookNumber ?? 1;
+}
+
+async function loadVerseTextForNeighborhood(
+   datasetId: string,
+   books: Book[],
+   verseIndex: VerseIndex,
+   verseIds: number[],
+   hasVerseText: boolean,
+): Promise<Map<number, VerseTextBook>> {
+   const textByBook = new Map<number, VerseTextBook>();
+
+   if (!hasVerseText) {
+      return textByBook;
+   }
+
+   const bookNumbers = Array.from(new Set(verseIds.map((verseId) => bookNumberForVerse(verseIndex, verseId))));
+   await Promise.all(
+      bookNumbers.map(async (bookNumber) => {
+         const book = books[bookNumber - 1];
+         if (!book) {
+            return;
+         }
+
+         textByBook.set(bookNumber, await loadVerseTextBook(datasetId, book));
+      }),
+   );
+
+   return textByBook;
 }
 
 interface VerseGraphProps {
    selectedVerse: VerseRef | null;
-   relatedNodes: RelatedNode[];
-   direction: DirectionMode;
+   nodes: GraphNode[];
+   links: GraphLink[];
    selectedRelatedVerseId: number | null;
    onSelect: (verseId: number) => void;
 }
 
 function VerseGraph({
    selectedVerse,
-   relatedNodes,
-   direction,
+   nodes,
+   links,
    selectedRelatedVerseId,
    onSelect,
 }: VerseGraphProps): React.ReactElement {
-   const radius = 220;
+   const positionedNodes = positionNodes(nodes);
+   const positionById = new Map(positionedNodes.map((node) => [ node.verseId, node ]));
 
    return (
-      <svg className="verse-graph" viewBox="-360 -280 720 560" role="img">
-         <title>Selected verse local reference graph</title>
-         {relatedNodes.map((node, index) => {
-            const angle = (index / Math.max(relatedNodes.length, 1)) * Math.PI * 2 - Math.PI / 2;
-            const x = Math.cos(angle) * radius;
-            const y = Math.sin(angle) * radius;
+      <svg className="verse-graph" viewBox="-420 -320 840 640" role="img" aria-label="Selected verse local reference graph">
+         {links.slice(0, 220).map((link, index) => {
+            const source = link.source === selectedVerse?.jwpubVerseId ? { x: 0, y: 0 } : positionById.get(link.source);
+            const target = link.target === selectedVerse?.jwpubVerseId ? { x: 0, y: 0 } : positionById.get(link.target);
+
+            if (!source || !target) {
+               return null;
+            }
+
+            return (
+               <path
+                  key={`${link.source}-${link.target}-${index}`}
+                  d={`M ${source.x} ${source.y} L ${target.x} ${target.y}`}
+                  className={link.direction === 'outgoing' ? 'verse-link outgoing' : 'verse-link incoming'}
+               />
+            );
+         })}
+         {positionedNodes.map((node) => {
             const active = node.verseId === selectedRelatedVerseId;
 
             return (
                <g key={node.verseId}>
-                  <path
-                     d={direction === 'outgoing' ? `M 0 0 L ${x} ${y}` : `M ${x} ${y} L 0 0`}
-                     className={direction === 'outgoing' ? 'verse-link outgoing' : 'verse-link incoming'}
-                  />
                   <circle
-                     cx={x}
-                     cy={y}
-                     r={active ? 24 : 18}
-                     className={active ? 'verse-node active' : 'verse-node'}
+                     cx={node.x}
+                     cy={node.y}
+                     r={active ? 24 : node.depth === 1 ? 18 : 13}
+                     className={nodeClassName(node, active)}
                      onClick={() => onSelect(node.verseId)}
                   />
-                  <text x={x} y={y + 36} textAnchor="middle" className="verse-node-label">
+                  <text x={node.x} y={node.y + 34} textAnchor="middle" className="verse-node-label">
                      {shortVerseLabel(node.label)}
                   </text>
                </g>
             );
          })}
-         <circle cx={0} cy={0} r={42} className="center-node" />
+         <circle cx={0} cy={0} r={46} className="center-node" />
          <text x={0} y={-4} textAnchor="middle" className="center-label">
             {selectedVerse ? selectedVerse.label.split(' ')[0] : 'Verse'}
          </text>
@@ -326,18 +520,59 @@ function VerseGraph({
    );
 }
 
+interface PositionedNode extends GraphNode {
+   x: number;
+   y: number;
+}
+
+function positionNodes(nodes: GraphNode[]): PositionedNode[] {
+   const byDepth = new Map<number, GraphNode[]>();
+
+   for (const node of nodes.slice(0, 140)) {
+      byDepth.set(node.depth, [ ...(byDepth.get(node.depth) ?? []), node ]);
+   }
+
+   return Array.from(byDepth.entries()).flatMap(([ depth, depthNodes ]) => {
+      const radius = 145 + (depth - 1) * 115;
+
+      return depthNodes.map((node, index) => {
+         const angle = (index / Math.max(depthNodes.length, 1)) * Math.PI * 2 - Math.PI / 2;
+
+         return {
+            ...node,
+            x: Math.cos(angle) * radius,
+            y: Math.sin(angle) * radius,
+         };
+      });
+   });
+}
+
+function nodeClassName(node: GraphNode, active: boolean): string {
+   const directionClass = node.incomingCount > 0 && node.outgoingCount > 0
+      ? 'both'
+      : node.incomingCount > 0
+         ? 'incoming'
+         : 'outgoing';
+
+   return active ? `verse-node ${directionClass} active` : `verse-node ${directionClass}`;
+}
+
 interface ConnectionDetailProps {
    selectedVerse: VerseRef | null;
-   relatedNode: RelatedNode | null;
-   direction: DirectionMode;
+   relatedNode: GraphNode | null;
    books: Book[];
+   verseIndex: VerseIndex;
+   verseTextByBook?: Map<number, VerseTextBook>;
+   hasVerseText: boolean;
 }
 
 function ConnectionDetail({
    selectedVerse,
    relatedNode,
-   direction,
    books,
+   verseIndex,
+   verseTextByBook,
+   hasVerseText,
 }: ConnectionDetailProps): React.ReactElement {
    if (!selectedVerse) {
       return <p className="muted-copy">No verse selected.</p>;
@@ -352,49 +587,58 @@ function ConnectionDetail({
       );
    }
 
-   const firstEdge = relatedNode.edges[0];
-   const sourceLabel = direction === 'outgoing' ? selectedVerse.label : relatedNode.label;
-   const targetLabel = direction === 'outgoing' ? relatedNode.label : selectedVerse.label;
-   const book = books.find((candidate) => candidate.bookNumber === selectedVerse.bookNumber);
+   const firstLink = relatedNode.edges[0];
+   const sourceLabel = verseIndex[String(firstLink.source)]?.label ?? `Verse ${firstLink.source}`;
+   const targetLabel = verseIndex[String(firstLink.target)]?.label ?? `Verse ${firstLink.target}`;
+   const relatedRef = verseIndex[String(relatedNode.verseId)] ?? null;
+   const relatedText = relatedRef ? lookupVerseText(verseTextByBook, relatedRef, books) : null;
 
    return (
       <div className="detail-stack">
          <div className="detail-verse">
-            {direction === 'outgoing' ? <ArrowUpFromLine size={18} /> : <ArrowDownToLine size={18} />}
+            {firstLink.direction === 'outgoing' ? <ArrowUpFromLine size={18} /> : <ArrowDownToLine size={18} />}
             <div>
                <span>{sourceLabel}</span>
                <strong>{targetLabel}</strong>
             </div>
          </div>
+         {relatedText ? <p className="verse-copy">{relatedText}</p> : null}
+         {!relatedText && hasVerseText ? <p className="muted-copy">Verse text is not available for this node yet.</p> : null}
+         {!hasVerseText ? <p className="muted-copy">This dataset was generated without verse text.</p> : null}
          <dl className="metadata-list">
             <div>
-               <dt>Dataset book</dt>
-               <dd>{book?.name ?? 'Unknown'}</dd>
+               <dt>Reference type</dt>
+               <dd>{relatedNode.edges.map((link) => edgeKindLabel(link.kind)).filter(unique).join(', ')}</dd>
             </div>
             <div>
-               <dt>Reference count</dt>
-               <dd>{formatNumber(relatedNode.count)}</dd>
+               <dt>Direction</dt>
+               <dd>{relatedNode.incomingCount > 0 && relatedNode.outgoingCount > 0 ? 'Incoming and outgoing' : firstLink.direction}</dd>
             </div>
             <div>
-               <dt>Type</dt>
-               <dd>{relatedNode.edges.map((edge) => edgeKindLabel(edge.kind)).filter(unique).join(', ')}</dd>
-            </div>
-            <div>
-               <dt>Target range</dt>
-               <dd>
-                  {firstEdge.targetStart === firstEdge.targetEnd
-                     ? String(firstEdge.targetStart)
-                     : `${firstEdge.targetStart}-${firstEdge.targetEnd}`}
-               </dd>
+               <dt>Connections</dt>
+               <dd>{formatNumber(relatedNode.edges.length)}</dd>
             </div>
             <div>
                <dt>Study note</dt>
-               <dd>{firstEdge.commentaryId ? `Commentary ${firstEdge.commentaryId}` : 'None'}</dd>
+               <dd>{relatedNode.edges.some((link) => link.edge.commentaryId) ? 'Includes study-note references' : 'No'}</dd>
             </div>
          </dl>
-         <p className="muted-copy">Verse text is not generated in this metadata-only build.</p>
       </div>
    );
+}
+
+function lookupVerseText(
+   textByBook: Map<number, VerseTextBook> | undefined,
+   verse: VerseRef,
+   books: Book[],
+): string | null {
+   const book = books[verse.bookNumber - 1];
+
+   if (!book) {
+      return null;
+   }
+
+   return textByBook?.get(book.bookNumber)?.[String(verse.jwpubVerseId)]?.text ?? null;
 }
 
 function shortVerseLabel(label: string): string {
@@ -404,9 +648,65 @@ function shortVerseLabel(label: string): string {
       return label;
    }
 
-   return `${parts.slice(0, -1).join(' ').slice(0, 14)} ${parts.at(-1)}`;
+   return `${parts.slice(0, -1).join(' ').slice(0, 16)} ${parts.at(-1)}`;
 }
 
 function unique(value: string, index: number, values: string[]): boolean {
    return values.indexOf(value) === index;
+}
+
+interface BuildRelatedNodesInput {
+   selectedVerseId: number;
+   adjacency: SourceAdjacency | TargetAdjacency | null;
+   direction: DirectionMode;
+   edgeKind: EdgeKindFilter;
+   verseIndex: Record<string, VerseRef>;
+}
+
+interface RelatedNodeCompat {
+   verseId: number;
+   label: string;
+   count: number;
+   edges: AdjacentEdge[];
+}
+
+export function buildRelatedNodes({
+   selectedVerseId,
+   adjacency,
+   direction,
+   edgeKind,
+   verseIndex,
+}: BuildRelatedNodesInput): RelatedNodeCompat[] {
+   if (!adjacency) {
+      return [];
+   }
+
+   const bucket = adjacency[String(selectedVerseId)];
+   const edges =
+      direction === 'incoming'
+         ? ((bucket as { incoming?: AdjacentEdge[] } | undefined)?.incoming ?? [])
+         : ((bucket as { outgoing?: AdjacentEdge[] } | undefined)?.outgoing ?? []);
+   const kindCode = edgeKindCode(edgeKind);
+   const grouped = new Map<number, AdjacentEdge[]>();
+
+   for (const edge of edges) {
+      if (kindCode !== null && edge.kind !== kindCode) {
+         continue;
+      }
+
+      const relatedVerseId = direction === 'incoming' ? edge.source : edge.targetStart;
+      const existing = grouped.get(relatedVerseId) ?? [];
+      existing.push(edge);
+      grouped.set(relatedVerseId, existing);
+   }
+
+   return Array.from(grouped.entries())
+      .map(([ verseId, nodeEdges ]) => ({
+         verseId,
+         label: verseIndex[String(verseId)]?.label ?? `Verse ${verseId}`,
+         count: nodeEdges.length,
+         edges: nodeEdges,
+      }))
+      .sort((left, right) => right.count - left.count || left.verseId - right.verseId)
+      .slice(0, 36);
 }

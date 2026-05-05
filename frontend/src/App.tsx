@@ -2,6 +2,10 @@ import { BarChart3, BookOpen, CircleHelp, GitBranch, Network } from 'lucide-reac
 import { useEffect, useMemo, useState } from 'react';
 
 import { DatasetBadge } from './components/DatasetBadge';
+import { ErrorState } from './components/ErrorState';
+import { LoadingShimmer } from './components/LoadingShimmer';
+import { loadDatasets } from './data/generated';
+import { useAsyncData } from './hooks/useAsyncData';
 import { AboutPage } from './pages/AboutPage';
 import { ChordPage } from './pages/ChordPage';
 import { OverviewPage } from './pages/OverviewPage';
@@ -25,7 +29,19 @@ const routes: Route[] = [
 
 export function App(): React.ReactElement {
    const [path, setPath] = useState(window.location.pathname);
+   const [selectedDatasetId, setSelectedDatasetId] = useState(
+      window.localStorage.getItem('bibliamap-dataset') ?? 'nwtsty',
+   );
+   const datasetsState = useAsyncData(loadDatasets, []);
    const activeRoute = useMemo(() => routeFromPath(path), [ path ]);
+   const datasets = datasetsState.data ?? [];
+   const selectedDataset = datasets.find((dataset) => dataset.datasetId === selectedDatasetId) ?? datasets[0] ?? null;
+
+   useEffect(() => {
+      if (selectedDataset && selectedDataset.datasetId !== selectedDatasetId) {
+         setSelectedDatasetId(selectedDataset.datasetId);
+      }
+   }, [ selectedDataset, selectedDatasetId ]);
 
    useEffect(() => {
       const handlePopState = (): void => setPath(window.location.pathname);
@@ -40,6 +56,27 @@ export function App(): React.ReactElement {
       setPath(href);
       window.scrollTo({ top: 0, behavior: 'smooth' });
    };
+
+   const handleDatasetChange = (datasetId: string): void => {
+      window.localStorage.setItem('bibliamap-dataset', datasetId);
+      setSelectedDatasetId(datasetId);
+   };
+
+   if (datasetsState.error) {
+      return (
+         <main className="main-surface">
+            <ErrorState title="Dataset registry is unavailable" error={datasetsState.error} />
+         </main>
+      );
+   }
+
+   if (!selectedDataset || datasetsState.showLoading) {
+      return (
+         <main className="main-surface">
+            <LoadingShimmer rows={5} />
+         </main>
+      );
+   }
 
    return (
       <div className="app-shell">
@@ -68,10 +105,14 @@ export function App(): React.ReactElement {
                ))}
             </nav>
 
-            <DatasetBadge />
+            <DatasetBadge
+               datasets={datasets}
+               selectedDatasetId={selectedDataset.datasetId}
+               onChange={handleDatasetChange}
+            />
          </aside>
 
-         <main className="main-surface">{renderRoute(activeRoute)}</main>
+         <main className="main-surface">{renderRoute(activeRoute, selectedDataset.datasetId)}</main>
       </div>
    );
 }
@@ -92,16 +133,16 @@ function routeFromPath(path: string): RouteId {
    return 'overview';
 }
 
-function renderRoute(route: RouteId): React.ReactNode {
+function renderRoute(route: RouteId, datasetId: string): React.ReactNode {
    switch (route) {
       case 'chord':
-         return <ChordPage />;
+         return <ChordPage datasetId={datasetId} />;
       case 'verse':
-         return <VersePage />;
+         return <VersePage datasetId={datasetId} />;
       case 'about':
-         return <AboutPage />;
+         return <AboutPage datasetId={datasetId} />;
       case 'overview':
       default:
-         return <OverviewPage />;
+         return <OverviewPage datasetId={datasetId} />;
    }
 }

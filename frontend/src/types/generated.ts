@@ -1,7 +1,16 @@
 export type Testament = 'OT' | 'NT';
 export type EdgeKindCode = 0 | 1 | 2;
 export type EdgeKindFilter = 'combined' | 'crossrefs' | 'study-notes';
-export type DirectionMode = 'outgoing' | 'incoming';
+export type DirectionMode = 'outgoing' | 'incoming' | 'all';
+
+export interface DatasetRegistryEntry {
+   datasetId: string;
+   publicationSymbol: string;
+   publicationTitle: string;
+   publicationYear?: number;
+   language: string;
+   hasVerseText: boolean;
+}
 
 export interface DatasetManifest {
    datasetId: string;
@@ -146,3 +155,10 @@ export interface TargetAdjacencyBucket {
 
 export type SourceAdjacency = Record<string, SourceAdjacencyBucket>;
 export type TargetAdjacency = Record<string, TargetAdjacencyBucket>;
+
+export interface VerseText {
+   label: string;
+   text: string;
+}
+
+export type VerseTextBook = Record<string, VerseText>;

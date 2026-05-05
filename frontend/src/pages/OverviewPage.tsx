@@ -8,14 +8,18 @@ import { loadManifest, loadStatsSummary } from '../data/generated';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { formatNumber, formatPercent } from '../utils/format';
 
-export function OverviewPage(): React.ReactElement {
+interface OverviewPageProps {
+   datasetId: string;
+}
+
+export function OverviewPage({ datasetId }: OverviewPageProps): React.ReactElement {
    const { data, error, showLoading } = useAsyncData(
       async () => {
-         const [ manifest, summary ] = await Promise.all([ loadManifest(), loadStatsSummary() ]);
+         const [ manifest, summary ] = await Promise.all([ loadManifest(datasetId), loadStatsSummary(datasetId) ]);
 
          return { manifest, summary };
       },
-      [],
+      [ datasetId ],
    );
 
    if (error) {
@@ -68,7 +72,10 @@ export function OverviewPage(): React.ReactElement {
             <article className="panel">
                <div className="panel-heading">
                   <ArrowUpFromLine size={20} />
-                  <h2>Most outgoing books</h2>
+                  <div>
+                     <h2>Most outgoing books</h2>
+                     <p>Books whose verses point to the most references in this dataset.</p>
+                  </div>
                </div>
                <RankList items={summary.topOutgoingBooks.map((item) => [ item.book, item.count ])} />
             </article>
@@ -76,7 +83,10 @@ export function OverviewPage(): React.ReactElement {
             <article className="panel">
                <div className="panel-heading">
                   <ArrowDownToLine size={20} />
-                  <h2>Most referenced books</h2>
+                  <div>
+                     <h2>Most referenced books</h2>
+                     <p>Books that receive the most links from other verses.</p>
+                  </div>
                </div>
                <RankList items={summary.topIncomingBooks.map((item) => [ item.book, item.count ])} />
             </article>
@@ -84,7 +94,10 @@ export function OverviewPage(): React.ReactElement {
             <article className="panel">
                <div className="panel-heading">
                   <GitBranch size={20} />
-                  <h2>Strongest book links</h2>
+                  <div>
+                     <h2>Strongest book links</h2>
+                     <p>The heaviest source-book to target-book connections.</p>
+                  </div>
                </div>
                <RankList
                   items={summary.strongestBookLinks.slice(0, 8).map((item) => [
@@ -97,7 +110,10 @@ export function OverviewPage(): React.ReactElement {
             <article className="panel">
                <div className="panel-heading">
                   <Blocks size={20} />
-                  <h2>Testament flow</h2>
+                  <div>
+                     <h2>Testament flow</h2>
+                     <p>How links move within and between the Hebrew-Aramaic and Greek Scriptures.</p>
+                  </div>
                </div>
                <div className="flow-list">
                   {testamentEntries.map(([ label, value ]) => (
@@ -114,7 +130,10 @@ export function OverviewPage(): React.ReactElement {
          <section className="wide-panel">
             <div className="panel-heading">
                <BookMarked size={20} />
-               <h2>High-density verses and chapters</h2>
+               <div>
+                  <h2>High-density verses and chapters</h2>
+                  <p>Verses and chapters with unusually many incoming or outgoing graph connections.</p>
+               </div>
             </div>
             <div className="triple-list">
                <RankColumn

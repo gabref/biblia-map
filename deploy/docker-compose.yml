@@ -1,0 +1,19 @@
+services:
+  bibliamap-frontend:
+    image: ghcr.io/gabref/bibliamap-frontend:latest
+    restart: unless-stopped
+    environment:
+      LISTEN_PORT: 80
+    networks:
+      - vps-reverse
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=vps-reverse
+      - traefik.http.routers.bibliamap.rule=Host(`bibliamap.gabudev.cloud`)
+      - traefik.http.routers.bibliamap.entrypoints=websecure
+      - traefik.http.routers.bibliamap.tls.certresolver=myresolver
+      - traefik.http.services.bibliamap.loadbalancer.server.port=80
+
+networks:
+  vps-reverse:
+    external: true

@@ -1,0 +1,132 @@
+name: Build, Test, Deploy BibliaMap
+
+on:
+   push:
+      branches:
+         - main
+   workflow_dispatch:
+
+env:
+   IMAGE_NAME: ghcr.io/gabref/bibliamap-frontend:latest
+   DATASET_ID: nwtsty
+   ASSET_PATH: assets/nwtsty_E.jwpub
+   GENERATED_OUTPUT: frontend/public/generated/nwtsty
+
+jobs:
+   build-test:
+      runs-on: ubuntu-latest
+      steps:
+         - name: Checkout
+           uses: actions/checkout@v4
+
+         - name: Setup Rust
+           uses: dtolnay/rust-toolchain@1.89.0
+
+         - name: Rust fmt
+           run: cargo fmt --all -- --check
+
+         - name: Rust clippy
+           run: cargo clippy --workspace --all-targets -- -D warnings
+
+         - name: Rust test
+           run: cargo test --workspace
+
+         - name: Generate BibliaMap data
+           run: |
+              if [ -f "${{ env.ASSET_PATH }}" ]; then
+                cargo run -p bibliamap-extractor -- \
+                  --input "${{ env.ASSET_PATH }}" \
+                  --dataset "${{ env.DATASET_ID }}" \
+                  --output "${{ env.GENERATED_OUTPUT }}" \
+                  --compact
+              else
+                test -f "${{ env.GENERATED_OUTPUT }}/manifest.json"
+                echo "Using committed generated data because ${{ env.ASSET_PATH }} is not present."
+              fi
+
+         - name: Setup Node
+           uses: actions/setup-node@v4
+           with:
+              node-version: 22
+              cache: npm
+              cache-dependency-path: frontend/package-lock.json
+
+         - name: Frontend install
+           working-directory: ./frontend
+           run: npm ci
+
+         - name: Frontend test
+           working-directory: ./frontend
+           run: npm test
+
+         - name: Frontend build
+           working-directory: ./frontend
+           run: npm run build
+
+   build-and-push:
+      needs: build-test
+      runs-on: ubuntu-latest
+      steps:
+         - name: Checkout
+           uses: actions/checkout@v4
+
+         - name: Setup Rust
+           uses: dtolnay/rust-toolchain@1.89.0
+
+         - name: Generate BibliaMap data
+           run: |
+              if [ -f "${{ env.ASSET_PATH }}" ]; then
+                cargo run -p bibliamap-extractor -- \
+                  --input "${{ env.ASSET_PATH }}" \
+                  --dataset "${{ env.DATASET_ID }}" \
+                  --output "${{ env.GENERATED_OUTPUT }}" \
+                  --compact
+              else
+                test -f "${{ env.GENERATED_OUTPUT }}/manifest.json"
+                echo "Using committed generated data because ${{ env.ASSET_PATH }} is not present."
+              fi
+
+         - name: Login to GHCR
+           run: echo "${{ secrets.GH_SECRET }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+         - name: Build and push frontend
+           run: |
+              docker build -t "${{ env.IMAGE_NAME }}" ./frontend
+              docker push "${{ env.IMAGE_NAME }}"
+
+   deploy:
+      needs: build-and-push
+      runs-on: ubuntu-latest
+      steps:
+         - name: Checkout
+           uses: actions/checkout@v4
+
+         - name: Install SSH key
+           run: |
+              install -m 600 -D /dev/null ~/.ssh/id_rsa
+              echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+              ssh-keyscan -H "${{ secrets.SSH_HOST }}" > ~/.ssh/known_hosts
+
+         - name: Prepare VPS folder
+           run: |
+              ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" '
+                mkdir -p "${{ secrets.WORK_DIR }}"
+              '
+
+         - name: Copy deploy files
+           run: |
+              scp deploy/docker-compose.yml "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.WORK_DIR }}/docker-compose.yml"
+
+         - name: Deploy on VPS
+           run: |
+              ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" '
+                echo "${{ secrets.GH_SECRET }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin &&
+                docker network create vps-reverse || true &&
+                cd "${{ secrets.WORK_DIR }}" &&
+                docker compose pull &&
+                docker compose up -d --remove-orphans
+              '
+
+         - name: Cleanup
+           if: always()
+           run: rm -rf ~/.ssh

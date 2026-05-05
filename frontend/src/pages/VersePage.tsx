@@ -6,10 +6,11 @@ import {
    forceManyBody,
    forceRadial,
    forceSimulation,
+   type Simulation,
    type SimulationLinkDatum,
    type SimulationNodeDatum,
 } from 'd3-force';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ErrorState } from '../components/ErrorState';
 import { FilterPanel } from '../components/FilterPanel';
@@ -77,6 +78,13 @@ interface ForceGraphLink extends SimulationLinkDatum<ForceGraphNode> {
    kind: number;
    edge: AdjacentEdge;
    key: string;
+}
+
+interface DragState {
+   verseId: number;
+   pointerId: number;
+   offsetX: number;
+   offsetY: number;
 }
 
 interface Neighborhood {
@@ -161,7 +169,8 @@ export function VersePage({ datasetId }: VersePageProps): React.ReactElement {
    );
    const nodes = neighborhoodState.data?.neighborhood.nodes ?? [];
    const links = neighborhoodState.data?.neighborhood.links ?? [];
-   const selectedRelated = nodes.find((node) => node.verseId === selectedRelatedVerseId) ?? nodes[0] ?? null;
+   const selectedDetailVerseId = selectedRelatedVerseId ?? selectedVerseRef?.jwpubVerseId ?? null;
+   const selectedRelated = nodes.find((node) => node.verseId === selectedDetailVerseId) ?? null;
 
    useEffect(() => {
       if (!selectedChapter) {
@@ -180,7 +189,7 @@ export function VersePage({ datasetId }: VersePageProps): React.ReactElement {
    }, [ chapterNumber, chaptersForBook ]);
 
    useEffect(() => {
-      setSelectedRelatedVerseId(null);
+      setSelectedRelatedVerseId(selectedVerse?.jwpubVerseId ?? null);
    }, [ selectedVerse?.jwpubVerseId, direction, edgeKind, layers ]);
 
    if (baseDataState.error) {
@@ -293,7 +302,7 @@ export function VersePage({ datasetId }: VersePageProps): React.ReactElement {
                      selectedVerse={selectedVerseRef}
                      nodes={nodes}
                      links={links}
-                     selectedRelatedVerseId={selectedRelated?.verseId ?? null}
+                     selectedRelatedVerseId={selectedDetailVerseId}
                      onSelect={setSelectedRelatedVerseId}
                   />
                )}
@@ -309,7 +318,9 @@ export function VersePage({ datasetId }: VersePageProps): React.ReactElement {
                </div>
                <ConnectionDetail
                   selectedVerse={selectedVerseRef}
+                  selectedDetailVerseId={selectedDetailVerseId}
                   relatedNode={selectedRelated}
+                  links={links}
                   books={baseDataState.data.books}
                   verseIndex={baseDataState.data.verseIndex}
                   verseTextByBook={neighborhoodState.data?.verseTextByBook}
@@ -515,17 +526,12 @@ function VerseGraph({
    );
    const [renderNodes, setRenderNodes] = useState<ForceGraphNode[]>(graphData.nodes);
    const [renderLinks, setRenderLinks] = useState<ForceGraphLink[]>(graphData.links);
+   const simulationRef = useRef<Simulation<ForceGraphNode, ForceGraphLink> | null>(null);
+   const dragStateRef = useRef<DragState | null>(null);
 
    useEffect(() => {
       const simulationNodes = graphData.nodes.map((node, index) => seedForceNode(node, index));
       const simulationLinks = graphData.links.map((link) => ({ ...link }));
-      const centerNode = simulationNodes.find((node) => node.selected);
-
-      if (centerNode) {
-         centerNode.fx = 0;
-         centerNode.fy = 0;
-      }
-
       const simulation = forceSimulation<ForceGraphNode>(simulationNodes)
          .force(
             'link',
@@ -548,6 +554,7 @@ function VerseGraph({
          .alpha(0.95)
          .alphaDecay(0.032);
 
+      simulationRef.current = simulation;
       simulation.tick(12);
       setRenderNodes([ ...simulationNodes ]);
       setRenderLinks([ ...simulationLinks ]);
@@ -558,8 +565,68 @@ function VerseGraph({
 
       return () => {
          simulation.stop();
+         if (simulationRef.current === simulation) {
+            simulationRef.current = null;
+         }
       };
    }, [ graphData ]);
+
+   const handlePointerDown = (node: ForceGraphNode, event: React.PointerEvent<SVGGElement>): void => {
+      const point = svgPoint(event);
+      const simulationNode = simulationRef.current?.nodes().find((candidate) => candidate.verseId === node.verseId);
+
+      if (!point || !simulationNode) {
+         onSelect(node.verseId);
+         return;
+      }
+
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      onSelect(node.verseId);
+      simulationNode.fx = simulationNode.x ?? point.x;
+      simulationNode.fy = simulationNode.y ?? point.y;
+      dragStateRef.current = {
+         verseId: node.verseId,
+         pointerId: event.pointerId,
+         offsetX: point.x - (simulationNode.x ?? 0),
+         offsetY: point.y - (simulationNode.y ?? 0),
+      };
+      simulationRef.current?.alphaTarget(0.18).restart();
+   };
+
+   const handlePointerMove = (event: React.PointerEvent<SVGGElement>): void => {
+      const dragState = dragStateRef.current;
+      if (!dragState || dragState.pointerId !== event.pointerId) {
+         return;
+      }
+
+      const point = svgPoint(event);
+      const simulation = simulationRef.current;
+      const simulationNode = simulation?.nodes().find((candidate) => candidate.verseId === dragState.verseId);
+
+      if (!point || !simulation || !simulationNode) {
+         return;
+      }
+
+      simulationNode.fx = point.x - dragState.offsetX;
+      simulationNode.fy = point.y - dragState.offsetY;
+      simulationNode.x = simulationNode.fx;
+      simulationNode.y = simulationNode.fy;
+      simulation.alphaTarget(0.18).restart();
+      setRenderNodes([ ...simulation.nodes() ]);
+      setRenderLinks([ ...renderLinks ]);
+   };
+
+   const handlePointerUp = (event: React.PointerEvent<SVGGElement>): void => {
+      const dragState = dragStateRef.current;
+      if (!dragState || dragState.pointerId !== event.pointerId) {
+         return;
+      }
+
+      dragStateRef.current = null;
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      simulationRef.current?.alphaTarget(0);
+   };
 
    return (
       <svg className="verse-graph" viewBox="-480 -340 960 680" role="img" aria-label="Selected verse local reference graph">
@@ -583,7 +650,7 @@ function VerseGraph({
                return (
                   <path
                      key={link.key}
-                     d={curvedLinkPath(source, target, link.direction)}
+                     d={straightLinkPath(source, target)}
                      className={link.direction === 'outgoing' ? 'verse-link outgoing' : 'verse-link incoming'}
                      markerEnd={link.direction === 'outgoing' ? 'url(#arrow-outgoing)' : 'url(#arrow-incoming)'}
                   />
@@ -593,14 +660,23 @@ function VerseGraph({
          <g className="verse-node-layer">
             {renderNodes.map((node) => {
                const active = !node.selected && node.verseId === selectedRelatedVerseId;
+               const centerActive = node.selected && node.verseId === selectedRelatedVerseId;
                const x = node.x ?? 0;
                const y = node.y ?? 0;
 
                return (
-                  <g key={node.verseId} className="force-node-group" transform={`translate(${x} ${y})`}>
+                  <g
+                     key={node.verseId}
+                     className="force-node-group"
+                     transform={`translate(${x} ${y})`}
+                     onPointerDown={(event) => handlePointerDown(node, event)}
+                     onPointerMove={handlePointerMove}
+                     onPointerUp={handlePointerUp}
+                     onPointerCancel={handlePointerUp}
+                  >
                      {node.selected ? (
                         <>
-                           <circle r={nodeRadius(node)} className="center-node" />
+                           <circle r={nodeRadius(node)} className={centerActive ? 'center-node active' : 'center-node'} />
                            <text y={-4} textAnchor="middle" className="center-label">
                               {selectedVerse ? selectedVerse.label.split(' ')[0] : 'Verse'}
                            </text>
@@ -707,19 +783,28 @@ function forceEndpoint(endpoint: number | string | ForceGraphNode | undefined): 
    return null;
 }
 
-function curvedLinkPath(source: ForceGraphNode, target: ForceGraphNode, direction: LinkDirection): string {
+function straightLinkPath(source: ForceGraphNode, target: ForceGraphNode): string {
    const sourceX = source.x ?? 0;
    const sourceY = source.y ?? 0;
    const targetX = target.x ?? 0;
    const targetY = target.y ?? 0;
-   const dx = targetX - sourceX;
-   const dy = targetY - sourceY;
-   const distance = Math.max(Math.hypot(dx, dy), 1);
-   const bend = Math.min(44, distance * 0.22) * (direction === 'outgoing' ? 1 : -1);
-   const controlX = (sourceX + targetX) / 2 + (-dy / distance) * bend;
-   const controlY = (sourceY + targetY) / 2 + (dx / distance) * bend;
 
-   return `M ${sourceX} ${sourceY} Q ${controlX} ${controlY} ${targetX} ${targetY}`;
+   return `M ${sourceX} ${sourceY} L ${targetX} ${targetY}`;
+}
+
+function svgPoint(event: React.PointerEvent<SVGGElement>): { x: number; y: number } | null {
+   const svg = event.currentTarget.ownerSVGElement;
+   const matrix = svg?.getScreenCTM();
+
+   if (!svg || !matrix) {
+      return null;
+   }
+
+   const point = svg.createSVGPoint();
+   point.x = event.clientX;
+   point.y = event.clientY;
+
+   return point.matrixTransform(matrix.inverse());
 }
 
 function nodeRadius(node: Pick<ForceGraphNode, 'depth' | 'edges' | 'selected'>): number {
@@ -742,7 +827,9 @@ function nodeClassName(node: Pick<ForceGraphNode, 'incomingCount' | 'outgoingCou
 
 interface ConnectionDetailProps {
    selectedVerse: VerseRef | null;
+   selectedDetailVerseId: number | null;
    relatedNode: GraphNode | null;
+   links: GraphLink[];
    books: Book[];
    verseIndex: VerseIndex;
    verseTextByBook?: Map<number, VerseTextBook>;
@@ -751,7 +838,9 @@ interface ConnectionDetailProps {
 
 function ConnectionDetail({
    selectedVerse,
+   selectedDetailVerseId,
    relatedNode,
+   links,
    books,
    verseIndex,
    verseTextByBook,
@@ -759,6 +848,39 @@ function ConnectionDetail({
 }: ConnectionDetailProps): React.ReactElement {
    if (!selectedVerse) {
       return <p className="muted-copy">No verse selected.</p>;
+   }
+
+   if (selectedDetailVerseId === selectedVerse.jwpubVerseId) {
+      const selectedText = lookupVerseText(verseTextByBook, selectedVerse, books);
+      const outgoingCount = links.filter((link) => link.source === selectedVerse.jwpubVerseId).length;
+      const incomingCount = links.filter((link) => link.target === selectedVerse.jwpubVerseId).length;
+
+      return (
+         <div className="detail-stack">
+            <div className="detail-verse">
+               <BookOpenCheck size={18} />
+               <div>
+                  <span>Selected verse</span>
+                  <strong>{selectedVerse.label}</strong>
+               </div>
+            </div>
+            {selectedText ? <p className="verse-copy">{selectedText}</p> : null}
+            <dl className="metadata-list">
+               <div>
+                  <dt>Outgoing</dt>
+                  <dd>{formatNumber(outgoingCount)}</dd>
+               </div>
+               <div>
+                  <dt>Incoming</dt>
+                  <dd>{formatNumber(incomingCount)}</dd>
+               </div>
+               <div>
+                  <dt>Visible links</dt>
+                  <dd>{formatNumber(links.length)}</dd>
+               </div>
+            </dl>
+         </div>
+      );
    }
 
    if (!relatedNode) {

@@ -743,6 +743,15 @@ meter::-webkit-meter-optimum-value {
       fill 0.16s ease;
 }
 
+.force-node-group {
+   cursor: grab;
+   touch-action: none;
+}
+
+.force-node-group:active {
+   cursor: grabbing;
+}
+
 .verse-node.incoming {
    fill: var(--incoming);
 }
@@ -764,6 +773,11 @@ meter::-webkit-meter-optimum-value {
    fill: var(--clay);
    stroke: #f7f0df;
    stroke-width: 1.6;
+}
+
+.center-node.active {
+   fill: var(--brass);
+   stroke-width: 2.4;
 }
 
 .verse-node-label,

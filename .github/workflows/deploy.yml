@@ -38,7 +38,8 @@ jobs:
                   --input "${{ env.ASSET_PATH }}" \
                   --dataset "${{ env.DATASET_ID }}" \
                   --output "${{ env.GENERATED_OUTPUT }}" \
-                  --compact
+                  --compact \
+                  --include-text
               else
                 test -f "${{ env.GENERATED_OUTPUT }}/manifest.json"
                 echo "Using committed generated data because ${{ env.ASSET_PATH }} is not present."
@@ -80,7 +81,8 @@ jobs:
                   --input "${{ env.ASSET_PATH }}" \
                   --dataset "${{ env.DATASET_ID }}" \
                   --output "${{ env.GENERATED_OUTPUT }}" \
-                  --compact
+                  --compact \
+                  --include-text
               else
                 test -f "${{ env.GENERATED_OUTPUT }}/manifest.json"
                 echo "Using committed generated data because ${{ env.ASSET_PATH }} is not present."

@@ -5,20 +5,23 @@ use std::{
    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
    fs::{self, File},
    path::{Path, PathBuf},
+   thread,
 };
 
 use anyhow::{Context, Result};
 use bibliamap_core::{
-   AdjacentEdge, BOOKS, BibleEdge, BookLinkStat, BookMatrix, CompactEdges, EdgeKind,
+   AdjacentEdge, BOOKS, BibleEdge, BookExport, BookLinkStat, BookMatrix, CompactEdges, EdgeKind,
    SourceAdjacency, TargetAdjacency, Testament, VerseRef, VerseStat, book_by_number,
    book_file_name, build_book_matrix, canonical_verse_id, distinct_book_links, exported_books,
-   matrix_total, strongest_book_links, testament_breakdown, top_verses, verse_label,
+   matrix_total, testament_breakdown,
 };
 use chrono::{SecondsFormat, Utc};
 use clap::Parser;
 use jwpub_reader::open_jwpub;
+use reqwest::blocking::Client;
 use rusqlite::{Connection, Row};
-use serde::Serialize;
+use scraper::{Html, Selector};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Parser)]
 #[command(author, version, about)]
@@ -59,6 +62,17 @@ struct ManifestExport {
    has_verse_text: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DatasetRegistryEntry {
+   dataset_id: String,
+   publication_symbol: String,
+   publication_title: String,
+   publication_year: Option<i32>,
+   language: String,
+   has_verse_text: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ChapterExport {
@@ -77,6 +91,13 @@ struct ChapterVerseExport {
    canonical_verse_id: i32,
    verse_number: u16,
    label: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VerseTextExport {
+   label: String,
+   text: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -215,14 +236,16 @@ fn main() -> Result<()> {
       .with_context(|| format!("failed to open {}", args.input.display()))?;
    let manifest = opened_jwpub.manifest().clone();
    let connection = opened_jwpub.connection();
-   let verse_map = load_verse_map(connection)?;
-   let chapter_exports = build_chapter_exports(&verse_map);
+   let books = load_books(connection)?;
+   let book_names = book_name_map(&books);
+   let verse_map = load_verse_map(connection, &book_names)?;
+   let chapter_exports = build_chapter_exports(&verse_map, &book_names);
    let (cross_reference_edges, skipped_direct) = extract_direct_edges(connection, &verse_map)?;
    let (study_note_edges, skipped_study, notes_with_references) =
       extract_study_note_edges(connection, &verse_map)?;
    let combined_edges = combined_edges(&cross_reference_edges, &study_note_edges);
    let generated_at = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
-   let manifest_export = ManifestExport {
+   let mut manifest_export = ManifestExport {
       dataset_id: args.dataset.clone(),
       publication_symbol: manifest.publication.symbol.clone(),
       publication_title: manifest.publication.title.clone(),
@@ -234,7 +257,19 @@ fn main() -> Result<()> {
          EdgeKind::CrossReference.label().to_string(),
          EdgeKind::StudyNoteReference.label().to_string(),
       ],
-      has_verse_text: args.include_text && !args.no_text,
+      has_verse_text: false,
+   };
+   let verse_text = if args.include_text && !args.no_text {
+      let text = fetch_verse_text(
+         &manifest.publication.symbol,
+         publication_locale(&args.input, &manifest.publication.symbol),
+         &chapter_exports,
+         &verse_map,
+      )?;
+      manifest_export.has_verse_text = !text.is_empty();
+      text
+   } else {
+      BTreeMap::new()
    };
    let extraction = ExtractionReport {
       mapped_verses: verse_map.len(),
@@ -259,10 +294,11 @@ fn main() -> Result<()> {
       &study_note_matrix,
       &combined_matrix,
       &verse_map,
+      &book_names,
       extraction.clone(),
    );
-   let book_stats = build_book_stats(&cross_reference_edges, &study_note_edges);
-   let chapter_stats = build_chapter_stats(&combined_edges, &verse_map);
+   let book_stats = build_book_stats(&cross_reference_edges, &study_note_edges, &book_names);
+   let chapter_stats = build_chapter_stats(&combined_edges, &verse_map, &book_names);
    let verse_stats = build_verse_stats(&combined_edges, &verse_map);
    let pretty = args.pretty && !args.compact;
 
@@ -282,6 +318,8 @@ fn main() -> Result<()> {
       &book_stats,
       &chapter_stats,
       &verse_stats,
+      &books,
+      &verse_text,
    )?;
 
    println!("{}", serde_json::to_string_pretty(&summary)?);
@@ -289,7 +327,77 @@ fn main() -> Result<()> {
    Ok(())
 }
 
-fn load_verse_map(connection: &Connection) -> Result<HashMap<i32, VerseRef>> {
+fn load_books(connection: &Connection) -> Result<Vec<BookExport>> {
+   let mut statement = connection.prepare(
+      r#"
+      SELECT
+         b.BibleBookId,
+         COALESCE(NULLIF(d.Title, ''), NULLIF(d.TocTitle, ''), NULLIF(b.ChapterDisplayTitle, ''), NULLIF(b.BookDisplayTitle, '')) AS Name,
+         COALESCE(NULLIF(d.TocTitle, ''), NULLIF(d.Title, ''), NULLIF(b.ChapterDisplayTitle, ''), NULLIF(b.BookDisplayTitle, '')) AS ShortName
+      FROM BibleBook b
+      LEFT JOIN Document d
+         ON d.DocumentId = b.BookDocumentId
+      ORDER BY b.BibleBookId
+      "#,
+   )?;
+   let rows = statement.query_map([], |row| {
+      Ok((
+         row.get::<_, i32>(0)?,
+         row.get::<_, Option<String>>(1)?,
+         row.get::<_, Option<String>>(2)?,
+      ))
+   })?;
+   let mut books = exported_books();
+
+   for row in rows {
+      let (book_number, name, short_name) = row?;
+      let Ok(book_number) = u8::try_from(book_number) else {
+         continue;
+      };
+      let Some(fallback) = book_by_number(book_number) else {
+         continue;
+      };
+      let index = usize::from(book_number - 1);
+
+      books[index] = BookExport {
+         book_number,
+         name: name.unwrap_or_else(|| fallback.name.to_string()),
+         short_name: short_name.unwrap_or_else(|| fallback.short_name.to_string()),
+         slug: fallback.slug.to_string(),
+         testament: fallback.testament,
+         chapters: fallback.chapters,
+      };
+   }
+
+   Ok(books)
+}
+
+fn book_name_map(books: &[BookExport]) -> HashMap<u8, String> {
+   books
+      .iter()
+      .map(|book| (book.book_number, book.name.clone()))
+      .collect()
+}
+
+fn localized_verse_label(
+   book_number: u8,
+   chapter_number: u16,
+   verse_number: u16,
+   book_names: &HashMap<u8, String>,
+) -> String {
+   let book_name = book_names
+      .get(&book_number)
+      .cloned()
+      .or_else(|| book_by_number(book_number).map(|book| book.name.to_string()))
+      .expect("book number should be valid");
+
+   format!("{book_name} {chapter_number}:{verse_number}")
+}
+
+fn load_verse_map(
+   connection: &Connection,
+   book_names: &HashMap<u8, String>,
+) -> Result<HashMap<i32, VerseRef>> {
    let mut statement = connection.prepare(
       r#"
       SELECT
@@ -326,7 +434,7 @@ fn load_verse_map(connection: &Connection) -> Result<HashMap<i32, VerseRef>> {
                book_number,
                chapter_number,
                verse_number,
-               label: verse_label(book_number, chapter_number, verse_number),
+               label: localized_verse_label(book_number, chapter_number, verse_number, book_names),
             },
          );
       }
@@ -353,7 +461,10 @@ fn parse_verse_number(label: &str) -> Option<u16> {
    digits.parse().ok()
 }
 
-fn build_chapter_exports(verse_map: &HashMap<i32, VerseRef>) -> Vec<ChapterExport> {
+fn build_chapter_exports(
+   verse_map: &HashMap<i32, VerseRef>,
+   book_names: &HashMap<u8, String>,
+) -> Vec<ChapterExport> {
    let mut chapters: BTreeMap<(u8, u16), Vec<&VerseRef>> = BTreeMap::new();
 
    for verse in verse_map.values() {
@@ -384,12 +495,16 @@ fn build_chapter_exports(verse_map: &HashMap<i32, VerseRef>) -> Vec<ChapterExpor
                label: verse.label.clone(),
             })
             .collect();
-         let book = book_by_number(book_number).expect("book should exist");
+         let book_name = book_names
+            .get(&book_number)
+            .cloned()
+            .or_else(|| book_by_number(book_number).map(|book| book.name.to_string()))
+            .expect("book should exist");
 
          ChapterExport {
             book_number,
             chapter_number,
-            label: format!("{} {}", book.name, chapter_number),
+            label: format!("{book_name} {chapter_number}"),
             first_verse_id,
             last_verse_id,
             verses: chapter_verses,
@@ -572,6 +687,7 @@ fn build_summary(
    study_note_matrix: &BookMatrix,
    combined_matrix: &BookMatrix,
    verse_map: &HashMap<i32, VerseRef>,
+   book_names: &HashMap<u8, String>,
    extraction: ExtractionReport,
 ) -> StatsSummary {
    let distinct_source_verses = combined_edges
@@ -584,8 +700,8 @@ fn build_summary(
       .map(|edge| edge.target_start_verse_id)
       .collect::<HashSet<_>>()
       .len();
-   let outgoing_books = count_books(combined_edges, EdgeDirection::Outgoing, 10);
-   let incoming_books = count_books(combined_edges, EdgeDirection::Incoming, 10);
+   let outgoing_books = count_books(combined_edges, EdgeDirection::Outgoing, book_names, 10);
+   let incoming_books = count_books(combined_edges, EdgeDirection::Incoming, book_names, 10);
    let (source_verse_counts, target_verse_counts, chapter_counts) =
       count_verse_and_chapter_stats(combined_edges);
 
@@ -604,18 +720,20 @@ fn build_summary(
       cross_testament_breakdown: testament_breakdown(combined_edges),
       top_outgoing_books: outgoing_books,
       top_incoming_books: incoming_books,
-      top_source_verses: top_verses(&source_verse_counts, verse_map, 12),
-      top_referenced_verses: top_verses(&target_verse_counts, verse_map, 12),
-      top_dense_chapters: top_chapters(&chapter_counts, 12),
-      strongest_book_links: strongest_book_links(combined_matrix, 16),
+      top_source_verses: top_verses_with_labels(&source_verse_counts, verse_map, 12),
+      top_referenced_verses: top_verses_with_labels(&target_verse_counts, verse_map, 12),
+      top_dense_chapters: top_chapters(&chapter_counts, book_names, 12),
+      strongest_book_links: strongest_book_links_with_names(combined_matrix, book_names, 16),
       strongest_ot_to_nt_connections: filtered_book_links(
          combined_matrix,
+         book_names,
          Testament::OT,
          Testament::NT,
          8,
       ),
       strongest_nt_to_ot_connections: filtered_book_links(
          combined_matrix,
+         book_names,
          Testament::NT,
          Testament::OT,
          8,
@@ -636,7 +754,12 @@ enum EdgeDirection {
    Incoming,
 }
 
-fn count_books(edges: &[BibleEdge], direction: EdgeDirection, limit: usize) -> Vec<CountByBook> {
+fn count_books(
+   edges: &[BibleEdge],
+   direction: EdgeDirection,
+   book_names: &HashMap<u8, String>,
+   limit: usize,
+) -> Vec<CountByBook> {
    let mut counts: HashMap<u8, u32> = HashMap::new();
 
    for edge in edges {
@@ -654,7 +777,10 @@ fn count_books(edges: &[BibleEdge], direction: EdgeDirection, limit: usize) -> V
 
          CountByBook {
             book_number,
-            book: book.name.to_string(),
+            book: book_names
+               .get(&book_number)
+               .cloned()
+               .unwrap_or_else(|| book.name.to_string()),
             testament: book.testament,
             count,
          }
@@ -698,16 +824,53 @@ fn count_verse_and_chapter_stats(edges: &[BibleEdge]) -> CountedStats {
    (source_verse_counts, target_verse_counts, chapter_counts)
 }
 
-fn top_chapters(chapter_counts: &HashMap<(u8, u16), u32>, limit: usize) -> Vec<CountByChapter> {
+fn top_verses_with_labels(
+   counts: &HashMap<i32, u32>,
+   verse_map: &HashMap<i32, VerseRef>,
+   limit: usize,
+) -> Vec<VerseStat> {
+   let mut stats = counts
+      .iter()
+      .filter_map(|(verse_id, count)| {
+         verse_map.get(verse_id).map(|verse| VerseStat {
+            verse_id: *verse_id,
+            label: verse.label.clone(),
+            book_number: verse.book_number,
+            chapter_number: verse.chapter_number,
+            count: *count,
+         })
+      })
+      .collect::<Vec<_>>();
+
+   stats.sort_by(|left, right| {
+      right
+         .count
+         .cmp(&left.count)
+         .then_with(|| left.verse_id.cmp(&right.verse_id))
+   });
+   stats.truncate(limit);
+
+   stats
+}
+
+fn top_chapters(
+   chapter_counts: &HashMap<(u8, u16), u32>,
+   book_names: &HashMap<u8, String>,
+   limit: usize,
+) -> Vec<CountByChapter> {
    let mut chapters = chapter_counts
       .iter()
       .map(|((book_number, chapter_number), count)| {
-         let book = book_by_number(*book_number).expect("book should exist");
+         let fallback = book_by_number(*book_number).expect("book should exist");
+         let book_name = book_names
+            .get(book_number)
+            .cloned()
+            .unwrap_or_else(|| fallback.name.to_string());
 
          CountByChapter {
             book_number: *book_number,
             chapter_number: *chapter_number,
-            label: format!("{} {}", book.name, chapter_number),
+            label: format!("{book_name} {chapter_number}"),
             count: *count,
          }
       })
@@ -726,11 +889,12 @@ fn top_chapters(chapter_counts: &HashMap<(u8, u16), u32>, limit: usize) -> Vec<C
 
 fn filtered_book_links(
    matrix: &BookMatrix,
+   book_names: &HashMap<u8, String>,
    source_testament: Testament,
    target_testament: Testament,
    limit: usize,
 ) -> Vec<BookLinkStat> {
-   let mut filtered = strongest_book_links(matrix, usize::MAX)
+   let mut filtered = strongest_book_links_with_names(matrix, book_names, usize::MAX)
       .into_iter()
       .filter(|link| {
          let source_book = book_by_number(link.source_book_number).expect("book should exist");
@@ -742,6 +906,49 @@ fn filtered_book_links(
    filtered.truncate(limit);
 
    filtered
+}
+
+fn strongest_book_links_with_names(
+   matrix: &BookMatrix,
+   book_names: &HashMap<u8, String>,
+   limit: usize,
+) -> Vec<BookLinkStat> {
+   let mut links = Vec::new();
+
+   for (source_index, row) in matrix.iter().enumerate() {
+      for (target_index, weight) in row.iter().enumerate() {
+         if *weight == 0 {
+            continue;
+         }
+
+         let source_book = &BOOKS[source_index];
+         let target_book = &BOOKS[target_index];
+         links.push(BookLinkStat {
+            source_book_number: source_book.book_number,
+            source_book: book_names
+               .get(&source_book.book_number)
+               .cloned()
+               .unwrap_or_else(|| source_book.name.to_string()),
+            target_book_number: target_book.book_number,
+            target_book: book_names
+               .get(&target_book.book_number)
+               .cloned()
+               .unwrap_or_else(|| target_book.name.to_string()),
+            weight: *weight,
+         });
+      }
+   }
+
+   links.sort_by(|left, right| {
+      right
+         .weight
+         .cmp(&left.weight)
+         .then_with(|| left.source_book_number.cmp(&right.source_book_number))
+         .then_with(|| left.target_book_number.cmp(&right.target_book_number))
+   });
+   links.truncate(limit);
+
+   links
 }
 
 fn self_links(edges: &[BibleEdge]) -> u32 {
@@ -785,6 +992,7 @@ fn matrix_link_set(matrix: &BookMatrix) -> BTreeSet<(usize, usize)> {
 fn build_book_stats(
    cross_reference_edges: &[BibleEdge],
    study_note_edges: &[BibleEdge],
+   book_names: &HashMap<u8, String>,
 ) -> Vec<BookStats> {
    let cross_outgoing = count_book_direction(cross_reference_edges, EdgeDirection::Outgoing);
    let cross_incoming = count_book_direction(cross_reference_edges, EdgeDirection::Incoming);
@@ -801,7 +1009,10 @@ fn build_book_stats(
 
          BookStats {
             book_number: book.book_number,
-            book: book.name.to_string(),
+            book: book_names
+               .get(&book.book_number)
+               .cloned()
+               .unwrap_or_else(|| book.name.to_string()),
             testament: book.testament,
             outgoing_cross_references,
             incoming_cross_references,
@@ -833,6 +1044,7 @@ fn count_book_direction(edges: &[BibleEdge], direction: EdgeDirection) -> HashMa
 fn build_chapter_stats(
    edges: &[BibleEdge],
    verse_map: &HashMap<i32, VerseRef>,
+   book_names: &HashMap<u8, String>,
 ) -> Vec<ChapterStats> {
    let mut chapter_keys = verse_map
       .values()
@@ -855,12 +1067,16 @@ fn build_chapter_stats(
    chapter_keys
       .into_iter()
       .map(|(book_number, chapter_number)| {
-         let book = book_by_number(book_number).expect("book should exist");
+         let fallback = book_by_number(book_number).expect("book should exist");
+         let book_name = book_names
+            .get(&book_number)
+            .cloned()
+            .unwrap_or_else(|| fallback.name.to_string());
 
          ChapterStats {
             book_number,
             chapter_number,
-            label: format!("{} {}", book.name, chapter_number),
+            label: format!("{book_name} {chapter_number}"),
             outgoing: *outgoing.get(&(book_number, chapter_number)).unwrap_or(&0),
             incoming: *incoming.get(&(book_number, chapter_number)).unwrap_or(&0),
          }
@@ -872,8 +1088,8 @@ fn build_verse_stats(edges: &[BibleEdge], verse_map: &HashMap<i32, VerseRef>) ->
    let (source_verse_counts, target_verse_counts, _) = count_verse_and_chapter_stats(edges);
 
    VerseStatsExport {
-      top_sources: top_verses(&source_verse_counts, verse_map, 50),
-      top_targets: top_verses(&target_verse_counts, verse_map, 50),
+      top_sources: top_verses_with_labels(&source_verse_counts, verse_map, 50),
+      top_targets: top_verses_with_labels(&target_verse_counts, verse_map, 50),
    }
 }
 
@@ -894,16 +1110,17 @@ fn write_generated_data(
    book_stats: &[BookStats],
    chapter_stats: &[ChapterStats],
    verse_stats: &VerseStatsExport,
+   books: &[BookExport],
+   verse_text: &BTreeMap<u8, BTreeMap<i32, VerseTextExport>>,
 ) -> Result<()> {
    fs::create_dir_all(output)?;
    fs::create_dir_all(output.join("matrices"))?;
    fs::create_dir_all(output.join("edges"))?;
    fs::create_dir_all(output.join("adjacency/source"))?;
    fs::create_dir_all(output.join("adjacency/target"))?;
-   fs::create_dir_all(output.join("verse-text"))?;
 
    write_json(output.join("manifest.json"), manifest, pretty)?;
-   write_json(output.join("books.json"), &exported_books(), pretty)?;
+   write_json(output.join("books.json"), books, pretty)?;
    write_json(output.join("chapters.json"), chapters, pretty)?;
    write_json(
       output.join("verse-index.json"),
@@ -950,8 +1167,64 @@ fn write_generated_data(
       pretty,
    )?;
    write_adjacency_files(output, cross_reference_edges, study_note_edges, pretty)?;
+   if verse_text.is_empty() {
+      let verse_text_dir = output.join("verse-text");
+      if verse_text_dir.exists() {
+         fs::remove_dir_all(verse_text_dir)?;
+      }
+   } else {
+      write_verse_text_files(output, verse_text, pretty)?;
+   }
+   update_dataset_registry(output, manifest, pretty)?;
 
    Ok(())
+}
+
+fn write_verse_text_files(
+   output: &Path,
+   verse_text: &BTreeMap<u8, BTreeMap<i32, VerseTextExport>>,
+   pretty: bool,
+) -> Result<()> {
+   fs::create_dir_all(output.join("verse-text"))?;
+
+   for book in BOOKS {
+      let file_name = book_file_name(book.book_number);
+      let empty = BTreeMap::<i32, VerseTextExport>::new();
+
+      write_json(
+         output.join("verse-text").join(file_name),
+         verse_text.get(&book.book_number).unwrap_or(&empty),
+         pretty,
+      )?;
+   }
+
+   Ok(())
+}
+
+fn update_dataset_registry(output: &Path, manifest: &ManifestExport, pretty: bool) -> Result<()> {
+   let Some(registry_dir) = output.parent() else {
+      return Ok(());
+   };
+   let registry_path = registry_dir.join("datasets.json");
+   let mut entries = if registry_path.exists() {
+      let registry_json = fs::read_to_string(&registry_path)?;
+      serde_json::from_str::<Vec<DatasetRegistryEntry>>(&registry_json).unwrap_or_default()
+   } else {
+      Vec::new()
+   };
+   let entry = DatasetRegistryEntry {
+      dataset_id: manifest.dataset_id.clone(),
+      publication_symbol: manifest.publication_symbol.clone(),
+      publication_title: manifest.publication_title.clone(),
+      publication_year: manifest.publication_year,
+      language: manifest.language.clone(),
+      has_verse_text: manifest.has_verse_text,
+   };
+
+   entries.retain(|existing| existing.dataset_id != manifest.dataset_id);
+   entries.push(entry);
+   entries.sort_by(|left, right| left.dataset_id.cmp(&right.dataset_id));
+   write_json(registry_path, &entries, pretty)
 }
 
 fn ordered_verse_map(verse_map: &HashMap<i32, VerseRef>) -> BTreeMap<i32, VerseRef> {
@@ -1014,6 +1287,171 @@ fn write_adjacency_files(
    Ok(())
 }
 
+fn fetch_verse_text(
+   publication_symbol: &str,
+   locale: String,
+   chapters: &[ChapterExport],
+   verse_map: &HashMap<i32, VerseRef>,
+) -> Result<BTreeMap<u8, BTreeMap<i32, VerseTextExport>>> {
+   const FETCH_BATCH_SIZE: usize = 10;
+
+   let client = Client::builder()
+      .user_agent("BibliaMap extractor")
+      .build()
+      .context("failed to build verse text HTTP client")?;
+   let mut text_by_book = BTreeMap::<u8, BTreeMap<i32, VerseTextExport>>::new();
+   let mut canonical_to_jwpub = HashMap::new();
+
+   for verse in verse_map.values() {
+      canonical_to_jwpub.insert(verse.canonical_verse_id, verse.jwpub_verse_id);
+   }
+
+   for (batch_index, chunk) in chapters.chunks(FETCH_BATCH_SIZE).enumerate() {
+      let fetched_chapters = thread::scope(|scope| {
+         let canonical_to_jwpub_ref = &canonical_to_jwpub;
+         let handles = chunk
+            .iter()
+            .map(|chapter| {
+               let client = client.clone();
+               let locale = locale.as_str();
+
+               scope.spawn(move || {
+                  fetch_chapter_text(
+                     &client,
+                     publication_symbol,
+                     locale,
+                     chapter,
+                     canonical_to_jwpub_ref,
+                     verse_map,
+                  )
+               })
+            })
+            .collect::<Vec<_>>();
+
+         handles
+            .into_iter()
+            .map(|handle| handle.join().expect("text worker should not panic"))
+            .collect::<Result<Vec<_>>>()
+      })?;
+
+      for fetched_chapter in fetched_chapters {
+         for (book_number, verse_id, verse_text) in fetched_chapter {
+            text_by_book
+               .entry(book_number)
+               .or_default()
+               .insert(verse_id, verse_text);
+         }
+      }
+
+      eprintln!(
+         "Fetched verse text for {}/{} chapters",
+         ((batch_index + 1) * FETCH_BATCH_SIZE).min(chapters.len()),
+         chapters.len()
+      );
+   }
+
+   Ok(text_by_book)
+}
+
+fn fetch_chapter_text(
+   client: &Client,
+   publication_symbol: &str,
+   locale: &str,
+   chapter: &ChapterExport,
+   canonical_to_jwpub: &HashMap<i32, i32>,
+   verse_map: &HashMap<i32, VerseRef>,
+) -> Result<Vec<(u8, i32, VerseTextExport)>> {
+   let Some(first_verse) = chapter.verses.first() else {
+      return Ok(Vec::new());
+   };
+   let finder_url = format!(
+      "https://www.jw.org/finder?wtlocale={locale}&prefer=lang&bible={}&pub={publication_symbol}",
+      first_verse.canonical_verse_id
+   );
+   let html = client
+      .get(&finder_url)
+      .send()
+      .with_context(|| format!("failed to fetch {finder_url}"))?
+      .error_for_status()
+      .with_context(|| format!("failed response for {finder_url}"))?
+      .text()
+      .with_context(|| format!("failed to read response body for {finder_url}"))?;
+   let document = Html::parse_document(&html);
+   let verse_selector = Selector::parse("span.verse").expect("verse selector should parse");
+   let mut verses = Vec::new();
+
+   for element in document.select(&verse_selector) {
+      let Some(element_id) = element.value().attr("id") else {
+         continue;
+      };
+      let Some(canonical_verse_id) = element_id
+         .strip_prefix('v')
+         .and_then(|id| id.parse::<i32>().ok())
+      else {
+         continue;
+      };
+      let Some(jwpub_verse_id) = canonical_to_jwpub.get(&canonical_verse_id) else {
+         continue;
+      };
+      let Some(verse) = verse_map.get(jwpub_verse_id) else {
+         continue;
+      };
+
+      if verse.book_number != chapter.book_number || verse.chapter_number != chapter.chapter_number
+      {
+         continue;
+      }
+
+      let text = clean_verse_text(&element.text().collect::<String>());
+      if text.is_empty() {
+         continue;
+      }
+
+      verses.push((
+         verse.book_number,
+         verse.jwpub_verse_id,
+         VerseTextExport {
+            label: verse.label.clone(),
+            text,
+         },
+      ));
+   }
+
+   Ok(verses)
+}
+
+fn clean_verse_text(raw_text: &str) -> String {
+   let without_markers = raw_text.replace(['+', '*'], " ");
+   let normalized = without_markers
+      .split_whitespace()
+      .collect::<Vec<_>>()
+      .join(" ");
+   let without_verse_number = normalized
+      .trim_start_matches(|character: char| character.is_ascii_digit())
+      .trim_start_matches(['\u{202f}', '\u{a0}', ' '])
+      .to_string();
+
+   without_verse_number.trim().to_string()
+}
+
+fn publication_locale(input: &Path, publication_symbol: &str) -> String {
+   let Some(file_stem) = input.file_stem().and_then(|stem| stem.to_str()) else {
+      return "E".to_string();
+   };
+   let prefix = format!("{publication_symbol}_");
+
+   if let Some(locale) = file_stem.strip_prefix(&prefix) {
+      return locale.to_string();
+   }
+
+   file_stem
+      .split('_')
+      .next_back()
+      .filter(|part| !part.is_empty())
+      .unwrap_or("E")
+      .to_string()
+}
+
 fn write_json(path: PathBuf, value: &(impl Serialize + ?Sized), pretty: bool) -> Result<()> {
    let file =
       File::create(&path).with_context(|| format!("failed to create {}", path.display()))?;
@@ -1030,6 +1468,7 @@ fn write_json(path: PathBuf, value: &(impl Serialize + ?Sized), pretty: bool) ->
 fn language_name(language: Option<i32>) -> String {
    match language {
       Some(0) => "English".to_string(),
+      Some(4) => "Italian".to_string(),
       Some(index) => format!("Language {index}"),
       None => "Unknown".to_string(),
    }
@@ -1080,7 +1519,9 @@ mod tests {
          ),
       ]);
 
-      let chapters = build_chapter_exports(&verse_map);
+      let books = exported_books();
+      let book_names = book_name_map(&books);
+      let chapters = build_chapter_exports(&verse_map, &book_names);
 
       assert_eq!(chapters.len(), 1);
       assert_eq!(chapters[0].verses[0].verse_number, 1);

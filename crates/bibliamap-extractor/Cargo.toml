@@ -12,6 +12,8 @@ bibliamap-core = { path = "../bibliamap-core" }
 chrono.workspace = true
 clap.workspace = true
 jwpub-reader = { path = "../jwpub-reader" }
+reqwest.workspace = true
 rusqlite.workspace = true
+scraper.workspace = true
 serde.workspace = true
 serde_json.workspace = true

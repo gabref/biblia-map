@@ -19,8 +19,17 @@ cargo run -p bibliamap-extractor -- \
   --input assets/nwtsty_E.jwpub \
   --dataset nwtsty \
   --output frontend/public/generated/nwtsty \
-  --compact
+  --compact \
+  --include-text
 ```
+
+Generate every known asset in `assets/`:
+
+```bash
+./scripts/generate_all_datasets.sh
+```
+
+Generated datasets include verse text when the public chapter pages can be fetched for the publication.
 
 Run checks:
 

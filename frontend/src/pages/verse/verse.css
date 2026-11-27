@@ -1,0 +1,1157 @@
+/*
+ * Verse Study workspace (Epic E-B) — page styles, all prefixed `vs-`.
+ * Tokens only (docs/design/design-spec.md §10). Loaded with the page chunk.
+ */
+
+.vs-page {
+   display: grid;
+   gap: var(--space-5);
+   max-width: var(--content-max);
+   margin: 0 auto;
+}
+
+/* ---------------------------------------------------------------- top: picker + trail */
+.vs-top {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: var(--space-2) var(--space-6);
+   min-width: 0;
+}
+
+.vs-picker {
+   position: relative;
+   min-width: 0;
+}
+
+.vs-picker__crumbs,
+.vs-picker__segment {
+   display: inline-flex;
+   align-items: center;
+   gap: var(--space-1);
+}
+
+.vs-picker__sep {
+   flex-shrink: 0;
+   color: var(--ink-3);
+}
+
+.vs-picker__crumb {
+   min-height: var(--control-h);
+   padding: 0 var(--space-2);
+   color: var(--ink);
+   background: transparent;
+   border: 0;
+   border-radius: var(--radius-sm);
+   box-shadow: inset 0 -1px 0 var(--line-strong);
+   font-family: var(--font-serif);
+   font-size: var(--text-2xl);
+   font-weight: 550;
+   font-variant-numeric: lining-nums;
+   line-height: 1.2;
+   letter-spacing: var(--tracking-tight);
+   cursor: pointer;
+   transition:
+      color var(--dur-fast) var(--ease-standard),
+      background-color var(--dur-fast) var(--ease-standard),
+      box-shadow var(--dur-fast) var(--ease-standard);
+}
+
+.vs-picker__crumb:hover,
+.vs-picker__crumb.is-open {
+   color: var(--accent);
+   background: var(--accent-soft);
+   box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.vs-picker__panel {
+   position: absolute;
+   top: calc(100% + var(--space-2));
+   left: 0;
+   z-index: var(--z-overlay);
+   display: grid;
+   gap: var(--space-3);
+   width: min(36rem, calc(100vw - 2 * var(--space-4)));
+   max-height: min(62vh, 30rem);
+   padding: var(--space-4);
+   overflow-y: auto;
+   overscroll-behavior: contain;
+   background: var(--surface-raised);
+   border: 1px solid var(--line-strong);
+   border-radius: var(--radius-lg);
+   box-shadow: var(--shadow-3);
+}
+
+.vs-picker__hint {
+   margin: 0;
+   color: var(--ink-2);
+   font-size: var(--text-sm);
+   font-weight: 600;
+}
+
+.vs-picker__group {
+   display: grid;
+   gap: var(--space-2);
+}
+
+.vs-picker__group .t-eyebrow {
+   margin: 0;
+}
+
+.vs-picker__grid {
+   display: grid;
+   grid-template-columns: repeat(auto-fill, minmax(2.75rem, 1fr));
+   gap: var(--space-1);
+}
+
+.vs-picker__grid--books {
+   grid-template-columns: repeat(auto-fill, minmax(8.25rem, 1fr));
+}
+
+.vs-picker__cell {
+   min-height: var(--control-h);
+   padding: 0 var(--space-2);
+   overflow: hidden;
+   color: var(--ink);
+   text-align: center;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+   background: transparent;
+   border: 1px solid transparent;
+   border-radius: var(--radius-sm);
+   font-size: var(--text-sm);
+   font-variant-numeric: tabular-nums lining-nums;
+   cursor: pointer;
+   transition: background-color var(--dur-fast) var(--ease-standard);
+}
+
+.vs-picker__grid--books .vs-picker__cell {
+   text-align: left;
+}
+
+.vs-picker__cell:hover {
+   background: var(--surface-hover);
+}
+
+.vs-picker__cell[aria-current="true"] {
+   color: var(--rubric);
+   background: var(--rubric-soft);
+   font-weight: 650;
+}
+
+.vs-trail {
+   display: flex;
+   align-items: center;
+   gap: var(--space-3);
+   min-width: 0;
+   color: var(--ink-3);
+   font-size: var(--text-sm);
+}
+
+.vs-trail__title {
+   display: inline-flex;
+   flex-shrink: 0;
+   align-items: center;
+   gap: var(--space-1);
+   font-size: var(--text-xs);
+   font-weight: 650;
+   letter-spacing: var(--tracking-caps);
+   text-transform: uppercase;
+}
+
+.vs-trail__list {
+   display: flex;
+   align-items: center;
+   gap: var(--space-1);
+   min-width: 0;
+   margin: 0;
+   padding: 2px;
+   overflow-x: auto;
+   list-style: none;
+   scrollbar-width: none;
+}
+
+.vs-trail__item {
+   display: inline-flex;
+   flex-shrink: 0;
+   align-items: center;
+   gap: var(--space-1);
+}
+
+.vs-trail__arrow {
+   color: var(--ink-disabled);
+}
+
+.vs-trail__link {
+   padding: 0.15rem var(--space-2);
+   color: var(--ink-2);
+   white-space: nowrap;
+   text-decoration: none;
+   border-radius: var(--radius-full);
+   font-variant-numeric: tabular-nums lining-nums;
+   transition:
+      color var(--dur-fast) var(--ease-standard),
+      background-color var(--dur-fast) var(--ease-standard);
+}
+
+.vs-trail__link:hover {
+   color: var(--accent);
+   background: var(--accent-soft);
+}
+
+.vs-trail__link.is-current {
+   color: var(--rubric);
+   background: var(--rubric-soft);
+   font-weight: 650;
+}
+
+/* ---------------------------------------------------------------- desk layout */
+.vs-desk {
+   display: grid;
+   gap: var(--space-5);
+   align-items: start;
+   min-width: 0;
+}
+
+.vs-desk__main {
+   display: grid;
+   gap: var(--space-5);
+   min-width: 0;
+}
+
+.vs-desk__side {
+   --vs-scale: 1;
+   min-width: 0;
+}
+
+.vs-page--wide .vs-desk {
+   grid-template-columns: minmax(0, 1fr) minmax(22rem, 26rem);
+}
+
+.vs-page--wide .vs-desk__side {
+   position: sticky;
+   top: var(--space-5);
+   display: flex;
+   flex-direction: column;
+   height: calc(100dvh - 2 * var(--space-5));
+   min-height: 24rem;
+}
+
+@media (min-width: 1120px) {
+   /* Before the media-query hook resolves (and for the loading skeleton), reserve the two columns. */
+   .vs-page:not(.vs-page--narrow) .vs-desk {
+      grid-template-columns: minmax(0, 1fr) minmax(22rem, 26rem);
+   }
+}
+
+.vs-skeleton-graph {
+   min-height: 24rem;
+}
+
+/* ---------------------------------------------------------------- studied verse */
+.vs-studied {
+   --vs-scale: 1;
+   padding: var(--space-4);
+   background: var(--surface);
+   border: 1px solid var(--line);
+   border-radius: var(--radius-lg);
+   box-shadow: var(--shadow-1);
+}
+
+.vs-studied__scripture {
+   display: grid;
+   gap: var(--space-1);
+}
+
+.vs-studied__card .ui-verse__ref {
+   /* On the tinted "selected" surface the plain rubric falls just under 4.5:1 in dark; lean it toward the ink. */
+   color: color-mix(in oklab, var(--rubric) 80%, var(--ink));
+   font-size: var(--text-md);
+}
+
+.vs-studied__card .ui-verse__meta {
+   color: var(--ink-2);
+}
+
+.vs-studied__card .ui-verse__text {
+   font-size: calc(var(--text-xl) * var(--vs-scale));
+   line-height: 1.6;
+}
+
+.vs-context {
+   max-width: var(--measure);
+   margin: 0;
+   padding: 0 var(--space-4) 0 calc(var(--space-4) + 3px);
+   color: var(--ink-3);
+   font-family: var(--font-serif);
+   font-size: calc(var(--text-sm) * var(--vs-scale));
+   line-height: 1.6;
+   /* Context is a glance, not the reading: two lines either side. */
+   display: -webkit-box;
+   overflow: hidden;
+   -webkit-box-orient: vertical;
+   -webkit-line-clamp: 2;
+   line-clamp: 2;
+}
+
+.vs-context__num {
+   margin-right: 1px;
+   color: var(--rubric);
+   font-family: var(--font-sans);
+   font-size: 0.72em;
+   font-weight: 650;
+   text-decoration: none;
+   vertical-align: 0.35em;
+}
+
+.vs-context__num:hover {
+   text-decoration: underline;
+}
+
+.vs-studied__bar {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: var(--space-1) var(--space-2);
+   margin-top: var(--space-3);
+   padding-top: var(--space-3);
+   border-top: 1px solid var(--line);
+}
+
+.vs-studied__steps {
+   display: inline-flex;
+   gap: var(--space-1);
+}
+
+.vs-studied__bar a.ui-button {
+   text-decoration: none;
+}
+
+.vs-studied__spacer {
+   flex: 1;
+}
+
+.vs-studied__note:has(.study-note) {
+   flex-basis: 100%;
+   order: 10;
+}
+
+/* ---------------------------------------------------------------- map card */
+.vs-map {
+   display: grid;
+   min-width: 0;
+   overflow: hidden;
+   background: var(--surface);
+   border: 1px solid var(--line);
+   border-radius: var(--radius-lg);
+   box-shadow: var(--shadow-1);
+}
+
+.vs-map__head {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   justify-content: space-between;
+   gap: var(--space-2) var(--space-4);
+   padding: var(--space-3) var(--space-4);
+}
+
+.vs-map__head p {
+   margin: 0;
+}
+
+.vs-map__title,
+.vs-refs__title {
+   margin: 0;
+   font-family: var(--font-serif);
+   font-size: var(--text-lg);
+   font-weight: 550;
+   line-height: var(--leading-snug);
+}
+
+.vs-map__canvas {
+   position: relative;
+   height: clamp(24rem, 70vh, 44rem);
+   background: var(--viz-canvas);
+   border-block: 1px solid var(--line);
+   view-transition-name: vs-map;
+}
+
+.vs-page--narrow .vs-map__canvas {
+   height: min(68dvh, 34rem);
+}
+
+.vs-map__canvas > .ui-skeleton,
+.vs-map__canvas > .ui-empty {
+   position: absolute;
+   inset: 0;
+}
+
+.vs-map__canvas > .ui-empty {
+   align-content: center;
+   justify-items: center;
+}
+
+.vs-map__foot {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   justify-content: space-between;
+   gap: var(--space-2) var(--space-4);
+   padding: var(--space-3) var(--space-4);
+}
+
+.vs-map__hint {
+   margin: 0;
+}
+
+.vs-legend {
+   display: flex;
+   flex-wrap: wrap;
+   gap: var(--space-1) var(--space-4);
+   margin: 0;
+   padding: 0;
+   list-style: none;
+}
+
+.vs-legend__item {
+   display: inline-flex;
+   align-items: center;
+   gap: var(--space-2);
+   color: var(--ink-2);
+   font-size: var(--text-xs);
+}
+
+.vs-legend__item::before {
+   width: 1rem;
+   height: 0;
+   content: "";
+   border-top: 3px solid var(--legend, var(--ink-3));
+   border-radius: 2px;
+}
+
+.vs-legend__item--outgoing { --legend: var(--outgoing); }
+.vs-legend__item--incoming { --legend: var(--incoming); }
+.vs-legend__item--both { --legend: var(--both); }
+
+.vs-legend__item--note::before {
+   border-top: 2px dashed var(--ink-2);
+}
+
+.vs-legend__item--far::before {
+   width: 0.5rem;
+   height: 0.5rem;
+   background: var(--ink-3);
+   border: 0;
+   border-radius: 50%;
+}
+
+.vs-progress {
+   display: inline-flex;
+   align-items: center;
+   gap: var(--space-2);
+   margin: 0;
+   color: var(--ink-2);
+   font-size: var(--text-xs);
+   font-variant-numeric: tabular-nums;
+}
+
+.vs-map__progress {
+   position: absolute;
+   top: var(--space-3);
+   left: var(--space-3);
+   padding: var(--space-1) var(--space-3);
+   background: var(--surface-raised);
+   border: 1px solid var(--line);
+   border-radius: var(--radius-full);
+   box-shadow: var(--shadow-1);
+   animation: fade-in var(--dur-base) var(--ease-standard) backwards;
+}
+
+/* ---------------------------------------------------------------- graph */
+.vs-graph {
+   position: absolute;
+   inset: 0;
+   overflow: hidden;
+}
+
+.vs-graph__svg {
+   display: block;
+   width: 100%;
+   height: 100%;
+   cursor: grab;
+   /* Pan and pinch are handled by the graph itself. */
+   touch-action: none;
+   user-select: none;
+   -webkit-user-select: none;
+   transition: opacity var(--dur-base) var(--ease-standard);
+}
+
+.vs-graph__svg.is-panning {
+   cursor: grabbing;
+}
+
+.vs-graph.is-busy .vs-graph__svg {
+   opacity: 0.45;
+}
+
+.vs-link {
+   fill: none;
+   stroke: var(--ink-3);
+   stroke-linecap: round;
+   opacity: 0.5;
+   transition:
+      opacity var(--dur-base) var(--ease-standard),
+      stroke var(--dur-base) var(--ease-standard);
+}
+
+.vs-link--outgoing { stroke: var(--outgoing); }
+.vs-link--incoming { stroke: var(--incoming); }
+.vs-link--both { stroke: var(--both); }
+
+.vs-link--note {
+   stroke-dasharray: 5 4;
+}
+
+.vs-link--far {
+   stroke: var(--ink-3);
+   opacity: 0.2;
+}
+
+.vs-link.is-active {
+   opacity: 0.95;
+}
+
+.vs-link.is-dimmed {
+   opacity: 0.06;
+}
+
+.vs-arrow--outgoing { fill: var(--outgoing); }
+.vs-arrow--incoming { fill: var(--incoming); }
+.vs-arrow--both { fill: var(--both); }
+
+.vs-node {
+   cursor: pointer;
+   outline: none;
+   animation: fade-in var(--dur-slow) var(--ease-standard) backwards;
+   transition: opacity var(--dur-base) var(--ease-standard);
+}
+
+.vs-node__dot {
+   fill: var(--ink-3);
+   stroke: var(--viz-node-ring);
+   stroke-width: 1.5px;
+   transition: fill var(--dur-base) var(--ease-standard);
+}
+
+.vs-node--outgoing .vs-node__dot { fill: var(--outgoing); }
+.vs-node--incoming .vs-node__dot { fill: var(--incoming); }
+.vs-node--both .vs-node__dot { fill: var(--both); }
+.vs-node--center .vs-node__dot { fill: var(--selected); }
+
+.vs-node--far .vs-node__dot {
+   fill: color-mix(in srgb, var(--ink-3) 70%, var(--viz-canvas));
+}
+
+.vs-node--far.is-active.vs-node--outgoing .vs-node__dot { fill: var(--outgoing); }
+.vs-node--far.is-active.vs-node--incoming .vs-node__dot { fill: var(--incoming); }
+.vs-node--far.is-active.vs-node--both .vs-node__dot { fill: var(--both); }
+
+/* Doubles as a generous hit area around small nodes. */
+.vs-node__ring {
+   fill: transparent;
+   stroke: var(--selected);
+   stroke-width: 2px;
+   stroke-opacity: 0;
+   transition: stroke-opacity var(--dur-fast) var(--ease-standard);
+}
+
+.vs-node.is-selected .vs-node__ring {
+   stroke-opacity: 1;
+}
+
+.vs-node:focus-visible .vs-node__ring {
+   stroke: var(--accent);
+   stroke-opacity: 1;
+   stroke-width: 2.5px;
+}
+
+.vs-node.is-flash .vs-node__ring {
+   stroke: var(--gilt);
+   animation: vs-flash 2s var(--ease-standard) both;
+}
+
+@keyframes vs-flash {
+   0% { stroke-opacity: 1; stroke-width: 2px; }
+   35% { stroke-opacity: 0.9; stroke-width: 7px; }
+   100% { stroke-opacity: 0; stroke-width: 2px; }
+}
+
+.vs-node__label {
+   fill: var(--viz-label);
+   stroke: var(--viz-canvas);
+   stroke-width: 3px;
+   stroke-linejoin: round;
+   paint-order: stroke;
+   font-size: 11px;
+   font-weight: 500;
+   font-variant-numeric: tabular-nums lining-nums;
+   transition:
+      opacity var(--dur-base) var(--ease-standard),
+      fill var(--dur-fast) var(--ease-standard);
+}
+
+.vs-node--far .vs-node__label {
+   fill: var(--ink-3);
+   font-size: 10px;
+}
+
+.vs-node--center .vs-node__label {
+   fill: var(--ink);
+   font-size: 13px;
+   font-weight: 700;
+}
+
+.vs-node.is-active .vs-node__label,
+.vs-node.is-selected .vs-node__label {
+   fill: var(--ink);
+   font-weight: 700;
+}
+
+.vs-node.is-dimmed {
+   opacity: 0.16;
+}
+
+.vs-node.is-dimmed .vs-node__label {
+   opacity: 0;
+}
+
+.vs-graph__svg.is-small .vs-node--far:not(.is-active) .vs-node__label,
+.vs-graph__svg.is-tiny .vs-node:not(.vs-node--center, .is-active, .is-selected) .vs-node__label {
+   opacity: 0;
+}
+
+.vs-node.is-exiting {
+   pointer-events: none;
+   animation: fade-out var(--dur-base) var(--ease-exit) forwards;
+}
+
+.vs-graph__tip {
+   position: absolute;
+   z-index: 2;
+   width: min(20rem, calc(100% - 8px));
+   pointer-events: none;
+   background: var(--surface-raised);
+   border: 1px solid var(--line-strong);
+   border-radius: var(--radius-md);
+   box-shadow: var(--shadow-3);
+   animation: fade-in var(--dur-fast) var(--ease-enter) backwards;
+}
+
+.vs-graph__tip .ui-verse__text {
+   font-size: var(--text-sm);
+   -webkit-line-clamp: 3;
+   line-clamp: 3;
+}
+
+.vs-graph__controls {
+   position: absolute;
+   right: var(--space-3);
+   bottom: var(--space-3);
+   display: grid;
+   gap: var(--space-1);
+}
+
+.vs-graph__controls .ui-button {
+   background: var(--surface-raised);
+   box-shadow: var(--shadow-1);
+}
+
+/* Moving to another verse: the list row morphs into the header; the map animates itself. */
+::view-transition-group(studied-verse) {
+   animation-duration: var(--dur-slow);
+   animation-timing-function: var(--ease-standard);
+}
+
+::view-transition-old(vs-map) {
+   display: none;
+}
+
+::view-transition-new(vs-map) {
+   animation: none;
+}
+
+/* ---------------------------------------------------------------- reference column */
+.vs-refs {
+   display: flex;
+   flex: 1;
+   flex-direction: column;
+   min-width: 0;
+   min-height: 0;
+   background: var(--surface);
+   border: 1px solid var(--line);
+   border-radius: var(--radius-lg);
+   box-shadow: var(--shadow-1);
+}
+
+.vs-refs__head {
+   display: grid;
+   gap: var(--space-3);
+   padding: var(--space-4) var(--space-4) var(--space-3);
+   border-bottom: 1px solid var(--line);
+}
+
+.vs-refs__head > p {
+   margin: 0;
+}
+
+.vs-refs__titleRow {
+   display: flex;
+   align-items: baseline;
+   justify-content: space-between;
+   gap: var(--space-3);
+}
+
+.vs-refs__filters {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   justify-content: space-between;
+   gap: var(--space-2);
+}
+
+.vs-refs__chips {
+   display: inline-flex;
+   gap: var(--space-1);
+}
+
+.vs-refs__search {
+   display: flex;
+   align-items: center;
+   gap: var(--space-2);
+   min-height: var(--control-h-sm);
+   padding: 0 var(--space-1) 0 var(--space-3);
+   color: var(--ink-3);
+   background: var(--bg-sunken);
+   border: 1px solid var(--line);
+   border-radius: var(--radius-md);
+   transition: border-color var(--dur-fast) var(--ease-standard);
+}
+
+.vs-refs__search:focus-within {
+   border-color: var(--accent);
+   box-shadow: var(--focus-ring);
+}
+
+.vs-refs__search input {
+   flex: 1;
+   min-width: 0;
+   height: var(--control-h-sm);
+   padding: 0;
+   color: var(--ink);
+   background: transparent;
+   border: 0;
+   outline: none;
+   font-size: var(--text-sm);
+}
+
+.vs-refs__search input::-webkit-search-cancel-button {
+   display: none;
+}
+
+.vs-refs__body {
+   flex: 1;
+   min-height: 0;
+   padding: var(--space-2);
+   transition: opacity var(--dur-base) var(--ease-standard);
+}
+
+.vs-page--wide .vs-refs__body {
+   overflow-y: auto;
+   overscroll-behavior: contain;
+   scrollbar-width: thin;
+}
+
+.vs-refs__body.is-stale {
+   opacity: 0.5;
+}
+
+.vs-refs__skeleton {
+   display: grid;
+   gap: var(--space-4);
+   padding: var(--space-3);
+}
+
+.vs-refs__skeletonRow {
+   display: grid;
+   gap: var(--space-2);
+}
+
+.vs-section + .vs-section {
+   margin-top: var(--space-4);
+}
+
+.vs-section__title {
+   position: sticky;
+   top: calc(-1 * var(--space-2));
+   z-index: 1;
+   display: flex;
+   align-items: center;
+   gap: var(--space-2);
+   margin: 0;
+   padding: var(--space-2) var(--space-3);
+   color: var(--ink);
+   background: var(--surface);
+   font-size: var(--text-sm);
+   font-weight: 650;
+}
+
+.vs-page--narrow .vs-section__title {
+   position: static;
+}
+
+.vs-section__mark {
+   flex-shrink: 0;
+   width: 0.75rem;
+   height: 3px;
+   background: var(--ink-3);
+   border-radius: 2px;
+}
+
+.vs-section--outgoing .vs-section__mark { background: var(--outgoing); }
+.vs-section--incoming .vs-section__mark { background: var(--incoming); }
+.vs-section--both .vs-section__mark { background: var(--both); }
+
+.vs-section__count,
+.vs-group__count {
+   margin-left: auto;
+   color: var(--ink-3);
+   font-size: var(--text-xs);
+   font-weight: 500;
+   font-variant-numeric: tabular-nums;
+}
+
+.vs-section__hint {
+   margin: 0;
+   padding: 0 var(--space-3) var(--space-2);
+}
+
+.vs-section > .vs-progress {
+   padding: 0 var(--space-3) var(--space-2);
+}
+
+.vs-section__groups,
+.vs-group__rows {
+   margin: 0;
+   padding: 0;
+   list-style: none;
+}
+
+.vs-group__title {
+   display: flex;
+   align-items: baseline;
+   gap: var(--space-2);
+   margin: 0;
+   padding: var(--space-3) var(--space-3) var(--space-1);
+   color: var(--ink-3);
+   font-size: var(--text-xs);
+   font-weight: 650;
+   letter-spacing: var(--tracking-caps);
+   text-transform: uppercase;
+}
+
+.vs-section__more {
+   display: grid;
+   justify-items: start;
+   gap: var(--space-2);
+   padding: var(--space-2) var(--space-3);
+}
+
+.vs-section__deferred {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: var(--space-2);
+}
+
+.vs-section__deferred p {
+   margin: 0;
+}
+
+.vs-row {
+   border: 1px solid transparent;
+   border-radius: var(--radius-md);
+   transition:
+      background-color var(--dur-fast) var(--ease-standard),
+      border-color var(--dur-fast) var(--ease-standard);
+}
+
+.vs-row.is-linked {
+   background: var(--surface-hover);
+}
+
+.vs-row.is-linked .ui-verse::before {
+   background: var(--accent);
+}
+
+.vs-row.is-open {
+   background: var(--surface-raised);
+   border-color: var(--line-strong);
+   box-shadow: var(--shadow-1);
+}
+
+.vs-row--both .ui-verse { --verse-rule: var(--both); }
+.vs-row--far .ui-verse { --verse-rule: var(--line-strong); }
+
+.vs-row .ui-verse__main {
+   cursor: pointer;
+}
+
+.vs-row .ui-verse__text {
+   font-size: calc(0.9375rem * var(--vs-scale));
+}
+
+/* The open row shows the whole passage in its detail, so the clamped copy steps aside. */
+.vs-row.is-open .ui-verse__text,
+.vs-row.is-open .ui-skeleton-lines {
+   display: none;
+}
+
+.vs-row .ui-verse__actions a.ui-button {
+   text-decoration: none;
+}
+
+@media (hover: hover) {
+   /* Actions float over the row's top-right corner so the verse text keeps the full width. */
+   .vs-row .ui-verse {
+      position: relative;
+   }
+
+   .vs-row .ui-verse__actions {
+      position: absolute;
+      top: var(--space-1);
+      right: var(--space-1);
+      padding: 2px;
+      background: var(--surface-raised);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-1);
+      opacity: 0;
+      transition: opacity var(--dur-fast) var(--ease-standard);
+   }
+
+   .vs-row:hover .ui-verse__actions,
+   .vs-row:focus-within .ui-verse__actions,
+   .vs-row.is-open .ui-verse__actions {
+      opacity: 1;
+   }
+}
+
+/* On phones the row actions live in the open detail, at full tap size. */
+.vs-page--narrow .vs-row .ui-verse__actions {
+   display: none;
+}
+
+.vs-row__meta {
+   display: inline-flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: var(--space-1);
+}
+
+.vs-row__dir {
+   display: inline-flex;
+   color: var(--ink-3);
+}
+
+.vs-row__dir--outgoing { color: var(--gilt-ink); }
+.vs-row__dir--incoming { color: var(--incoming); }
+.vs-row__dir--both { color: var(--both); }
+
+/* ---------------------------------------------------------------- detail */
+.vs-detail {
+   display: grid;
+   gap: var(--space-4);
+   padding: 0 var(--space-4) var(--space-4) calc(var(--space-4) + 3px);
+}
+
+.ui-sheet .vs-detail {
+   padding: 0;
+}
+
+.vs-detail p {
+   margin: 0;
+}
+
+.vs-detail__passage {
+   font-size: calc(var(--text-md) * var(--vs-scale, 1));
+   line-height: 1.65;
+}
+
+.vs-detail__num {
+   margin-right: 2px;
+   color: var(--rubric);
+   font-family: var(--font-sans);
+   font-size: 0.68em;
+   font-weight: 650;
+}
+
+.vs-detail__missing {
+   color: var(--ink-3);
+   font-family: var(--font-sans);
+   font-size: var(--text-sm);
+}
+
+.vs-detail__why,
+.vs-detail__via {
+   display: grid;
+   gap: var(--space-2);
+}
+
+.vs-detail__edges {
+   display: grid;
+   gap: var(--space-2);
+   margin: 0;
+   padding: 0;
+   list-style: none;
+}
+
+.vs-detail__edge {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: var(--space-1) var(--space-2);
+   font-size: var(--text-sm);
+}
+
+.vs-detail__route {
+   display: inline-flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: var(--space-1);
+   color: var(--ink-2);
+}
+
+.vs-detail__route .t-ref {
+   color: var(--ink);
+   white-space: normal;
+}
+
+.vs-detail__note {
+   flex-basis: 100%;
+   margin: 0;
+   padding: var(--space-2) var(--space-3);
+   color: var(--ink-2);
+   white-space: pre-line;
+   background: var(--accent-soft);
+   border-left: 2px solid var(--accent);
+   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+   font-size: var(--text-sm);
+   line-height: var(--leading-normal);
+}
+
+.vs-detail__lemma {
+   color: var(--ink);
+   font-weight: 650;
+}
+
+.vs-detail__cite {
+   color: var(--accent);
+   text-decoration: underline;
+   text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+   text-underline-offset: 2px;
+}
+
+.vs-detail__cite.is-cited {
+   font-weight: 650;
+   text-decoration-color: currentColor;
+}
+
+.vs-detail__chips,
+.vs-detail__actions {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: var(--space-2);
+}
+
+.vs-detail__actions a.ui-button {
+   text-decoration: none;
+}
+
+/* ---------------------------------------------------------------- phones */
+.vs-switch {
+   /* Clears the sticky app bar when scrolled to. */
+   scroll-margin-top: 4.5rem;
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: var(--space-3);
+   margin-bottom: var(--space-3);
+}
+
+.vs-filter-sheet {
+   display: grid;
+   gap: var(--space-5);
+}
+
+.vs-filter-sheet__group {
+   display: grid;
+   gap: var(--space-2);
+}
+
+.vs-filter-sheet__group p {
+   margin: 0;
+}
+
+@media (max-width: 760px) {
+   .vs-page {
+      gap: var(--space-4);
+   }
+
+   .vs-picker__crumb {
+      min-height: var(--tap-min);
+      font-size: var(--text-xl);
+   }
+
+   .vs-picker__cell {
+      min-height: var(--tap-min);
+   }
+
+   .vs-studied {
+      padding: var(--space-3);
+   }
+
+   .vs-studied__card .ui-verse__text {
+      font-size: calc(var(--text-lg) * var(--vs-scale));
+   }
+
+   .vs-studied__bar .ui-button,
+   .vs-detail__actions .ui-button,
+   .vs-switch .ui-button,
+   .vs-graph__controls .ui-button {
+      --btn-h: var(--tap-min);
+   }
+
+   .vs-switch .ui-tabs__tab,
+   .vs-refs__head .ui-tabs__tab {
+      min-height: calc(var(--tap-min) - 8px);
+   }
+
+   .vs-refs__search,
+   .vs-refs__search input {
+      min-height: var(--tap-min);
+   }
+
+   .vs-map__hint,
+   .vs-studied__spacer {
+      display: none;
+   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+   .vs-node.is-flash .vs-node__ring {
+      stroke-opacity: 0.8;
+      animation: none;
+   }
+}

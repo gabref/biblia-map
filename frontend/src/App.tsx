@@ -383,7 +383,7 @@ export function App(): React.ReactElement {
             {t('shell.skipToContent')}
          </a>
          <aside className="sidebar" aria-label={t('shell.nav.primary')}>
-            <AppLink href={routeHref({ name: 'home' }, linkParams)} className="brand" aria-label={t('shell.brand.home')}>
+            <AppLink href={routeHref({ name: 'home' }, linkParams)} className="brand">
                <span className="brand-mark">
                   <img src="/favicon.svg" alt="" />
                </span>

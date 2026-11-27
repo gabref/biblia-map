@@ -17,7 +17,6 @@ export const en = {
    // ---- shell.* (E-F) ----
    'shell.brand.title': 'BibliaMap',
    'shell.brand.subtitle': 'Bible cross references',
-   'shell.brand.home': 'BibliaMap home',
    'shell.skipToContent': 'Skip to content',
    'shell.nav.primary': 'Primary navigation',
    'shell.nav.pages': 'Pages',

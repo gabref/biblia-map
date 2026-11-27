@@ -6,7 +6,6 @@ import { resetLocaleForTests } from '../i18n/locale';
 import type { DatasetRegistryEntry } from '../types/generated';
 import { DatasetBadge, datasetDisplayName } from './DatasetBadge';
 import { ErrorState } from './ErrorState';
-import { FilterPanel } from './FilterPanel';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { LoadingShimmer } from './LoadingShimmer';
 
@@ -81,46 +80,5 @@ describe('LoadingShimmer / ErrorState', () => {
       expect(onRetry).toHaveBeenCalledOnce();
       rerender(<ErrorState title="Oops" error={new Error('boom')} />);
       expect(screen.getByRole('button', { name: 'Reload page' })).toBeInTheDocument();
-   });
-});
-
-describe('FilterPanel', () => {
-   function mockPhone(matches: boolean): void {
-      vi.stubGlobal('matchMedia', (query: string) => ({
-         matches,
-         media: query,
-         onchange: null,
-         addEventListener: () => undefined,
-         removeEventListener: () => undefined,
-         addListener: () => undefined,
-         removeListener: () => undefined,
-         dispatchEvent: () => false,
-      }));
-      window.matchMedia = globalThis.matchMedia;
-   }
-
-   it('stays inline on wide screens', () => {
-      mockPhone(false);
-      render(
-         <FilterPanel title="Filters" collapsible activeCount={2}>
-            <span>controls</span>
-         </FilterPanel>,
-      );
-      expect(screen.getByRole('region', { name: 'Filters' })).toHaveTextContent('controls');
-   });
-
-   it('collapses to a "Filters (n)" button on phones', () => {
-      mockPhone(true);
-      render(
-         <FilterPanel title="Verse filters" collapsible activeCount={2}>
-            <span>controls</span>
-         </FilterPanel>,
-      );
-      const trigger = screen.getByRole('button', { name: 'Filters (2)' });
-
-      expect(trigger).toHaveAttribute('aria-expanded', 'false');
-      expect(screen.queryByText('controls')).not.toBeInTheDocument();
-      fireEvent.click(trigger);
-      expect(screen.getByText('controls')).toBeInTheDocument();
    });
 });

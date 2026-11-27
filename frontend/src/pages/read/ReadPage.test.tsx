@@ -74,15 +74,15 @@ describe('ReadPage', () => {
       render(<ReadPage datasetId="nwtsty" />);
 
       expect(await screen.findByRole('heading', { level: 1, name: 'John 3' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Verse 16, 1 connections' })).toHaveTextContent('For God loved the world so much');
-      expect(screen.getByRole('button', { name: 'Verse 17, 0 connections' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Verse 16, 1 connections:\s*For God loved/ })).toHaveTextContent('For God loved the world so much');
+      expect(screen.getByRole('button', { name: /^Verse 17, 0 connections:/ })).toBeInTheDocument();
       expect(screen.getByText('2 verses · 1 connections')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Romans: 1 connections. Show its chapters' })).toBeInTheDocument();
    });
 
    it('opens a verse: connections with VerseLink, study notes, history, hash', async () => {
       render(<><ReadPage datasetId="nwtsty" /><HistoryProbe /></>);
-      fireEvent.click(await screen.findByRole('button', { name: 'Verse 16, 1 connections' }));
+      fireEvent.click(await screen.findByRole('button', { name: /^Verse 16, 1 connections:\s*For God loved/ }));
 
       const link = await screen.findByRole('link', { name: 'Romans 5:8' });
 

@@ -133,13 +133,17 @@ const VerseRow = memo(function VerseRow({
                data-heat={step}
                style={style}
                aria-pressed={selected}
-               aria-label={`${t('read.verse.aria', { verse: verseNumber, count })}${isBookmarked ? `, ${t('read.verse.saved')}` : ''}`}
                onClick={handleClick}
                onKeyDown={handleKeyDown}
                onFocus={() => onFocusVerse(verseNumber)}
             >
                <span className="read-verse__heat" aria-hidden="true" />
                <span className="read-verse__num" aria-hidden="true">{verseNumber}</span>
+               {/* The accessible name is the content (WCAG 2.5.3 label in name): the number, count and
+                  saved state are spoken from this hidden prefix, then the verse text itself. */}
+               <span className="visually-hidden">
+                  {`${t('read.verse.aria', { verse: verseNumber, count })}${isBookmarked ? `, ${t('read.verse.saved')}` : ''}: `}
+               </span>
                <span className="read-verse__body">{verse.text ?? verse.ref.label}</span>
                <span className="read-verse__meta" aria-hidden="true">
                   {isBookmarked ? <Bookmark size={12} className="read-verse__saved" /> : null}

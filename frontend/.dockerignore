@@ -12,3 +12,7 @@ Dockerfile
 .dockerignore
 .git
 .env*
+e2e
+playwright.config.ts
+test-results
+playwright-report

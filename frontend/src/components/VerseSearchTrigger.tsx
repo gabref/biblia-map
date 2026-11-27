@@ -23,6 +23,8 @@ export function VerseSearchTrigger({ onOpen, onIntent, className }: VerseSearchT
          onClick={onOpen}
          onPointerEnter={onIntent}
          onFocus={onIntent}
+         // The visible label is hidden on narrow screens (icon only): keep the accessible name.
+         aria-label={t('home.search.trigger')}
          aria-haspopup="dialog"
          aria-keyshortcuts="/ Control+K Meta+K"
       >

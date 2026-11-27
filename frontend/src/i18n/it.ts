@@ -13,7 +13,6 @@ export const it: Partial<Messages> = {
    // ---- shell.* ----
    'shell.brand.title': 'BibliaMap',
    'shell.brand.subtitle': 'Riferimenti biblici',
-   'shell.brand.home': 'Pagina iniziale di BibliaMap',
    'shell.skipToContent': 'Vai al contenuto',
    'shell.nav.primary': 'Navigazione principale',
    'shell.nav.pages': 'Pagine',

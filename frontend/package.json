@@ -8,7 +8,9 @@
       "build": "tsc --noEmit -p tsconfig.json && vite build",
       "preview": "vite preview --host 0.0.0.0",
       "test": "vitest run",
-      "typecheck": "tsc --noEmit -p tsconfig.json"
+      "typecheck": "tsc --noEmit -p tsconfig.json",
+      "precompress": "node scripts/precompress.mjs dist",
+      "size": "node scripts/check-size.mjs dist"
    },
    "dependencies": {
       "@fontsource-variable/instrument-sans": "5.3.0",

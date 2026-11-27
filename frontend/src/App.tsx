@@ -1,5 +1,5 @@
 import { ArrowUpRight, BarChart3, Blocks, CircleHelp, GitBranch, Network } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
 import { DatasetBadge } from './components/DatasetBadge';
 import { ErrorState } from './components/ErrorState';
@@ -9,12 +9,15 @@ import { loadDatasets } from './data/generated';
 import { useAsyncData } from './hooks/useAsyncData';
 import { useSlidingIndicator } from './hooks/useSlidingIndicator';
 import { useTheme } from './hooks/useTheme';
-import { AboutPage } from './pages/AboutPage';
-import { ChordPage } from './pages/ChordPage';
-import { OverviewPage } from './pages/OverviewPage';
-import { RelationshipBlocksPage } from './pages/RelationshipBlocksPage';
-import { StyleguidePage } from './pages/StyleguidePage';
-import { VersePage } from './pages/VersePage';
+import {
+   AboutPage,
+   ChordPage,
+   OverviewPage,
+   preloadRoute,
+   RelationshipBlocksPage,
+   StyleguidePage,
+   VersePage,
+} from './pages/lazyPages';
 
 type RouteId = 'overview' | 'chord' | 'verse' | 'blocks' | 'about' | 'styleguide';
 
@@ -131,6 +134,8 @@ export function App(): React.ReactElement {
                         aria-current={active ? 'page' : undefined}
                         data-active={active}
                         onClick={(event) => navigate(event, route.href)}
+                        onPointerEnter={() => preloadRoute(route.id, selectedDataset.datasetId)}
+                        onFocus={() => preloadRoute(route.id, selectedDataset.datasetId)}
                      >
                         {route.icon}
                         <span>{route.label}</span>
@@ -154,7 +159,9 @@ export function App(): React.ReactElement {
 
          <main ref={mainRef} id="main-content" className="main-surface" tabIndex={-1}>
             <div key={`${activeRoute}:${selectedDataset.datasetId}`} className="route-view">
-               {renderRoute(activeRoute, selectedDataset.datasetId)}
+               <Suspense fallback={<LoadingShimmer rows={6} />}>
+                  {renderRoute(activeRoute, selectedDataset.datasetId)}
+               </Suspense>
             </div>
          </main>
          <CreditLinks className="mobile-credit" />

@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
+# Regenerate datasets from known assets in assets/.
+#
+# Usage: ./scripts/generate_all_datasets.sh [--only assets/<file>.jwpub ...]
+#   Without --only, every known asset present is regenerated and
+#   frontend/public/generated/datasets.json is rebuilt from scratch.
+#   With --only, just the given assets are regenerated; datasets.json keeps
+#   the entries of the other datasets (the extractor upserts its own entry).
 set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 declare -A DATASET_IDS=(
    ["assets/Rbi8_E.jwpub"]="rbi8"
@@ -8,9 +17,35 @@ declare -A DATASET_IDS=(
    ["assets/nwtsty_I.jwpub"]="nwtsty-i"
 )
 
-rm -f frontend/public/generated/datasets.json
+selected=()
+while [[ $# -gt 0 ]]; do
+   case "$1" in
+      --only)
+         shift
+         [[ $# -gt 0 ]] || {
+            echo "--only requires an asset path" >&2
+            exit 2
+         }
+         if [[ -z "${DATASET_IDS[$1]+x}" ]]; then
+            echo "unknown asset: $1 (known: ${!DATASET_IDS[*]})" >&2
+            exit 2
+         fi
+         selected+=("$1")
+         ;;
+      *)
+         echo "unknown argument: $1" >&2
+         exit 2
+         ;;
+   esac
+   shift
+done
 
-for asset in "${!DATASET_IDS[@]}"; do
+if [[ ${#selected[@]} -eq 0 ]]; then
+   selected=("${!DATASET_IDS[@]}")
+   rm -f frontend/public/generated/datasets.json
+fi
+
+for asset in "${selected[@]}"; do
    if [[ ! -f "$asset" ]]; then
       continue
    fi

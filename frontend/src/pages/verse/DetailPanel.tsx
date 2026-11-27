@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen, Copy, Crosshair } from 'lucide-react';
+import { ArrowRight, BookOpen, Copy, Crosshair, ExternalLink } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { SaveVerseButton } from '../../components/SaveVerseButton';
@@ -31,6 +31,8 @@ export interface DetailContext {
    passageVerses: (node: NeighborNode) => PassageVerse[];
    labelOf: (key: string) => string | null;
    chapterHref: (verse: VerseRef) => string;
+   /** jw.org finder link for a verse or range (opens JW Library when installed); `null` hides it. */
+   jwLibraryHref: (first: VerseRef, last: VerseRef | undefined) => string | null;
    onStudy: (key: string) => void;
    onSelect: (key: string | null) => void;
    onCopy: (key: string) => void;
@@ -220,6 +222,18 @@ export function DetailPanel({ node, label, context }: DetailPanelProps): React.R
                   size="sm"
                   endKey={last && last !== first ? verseKey(last) : undefined}
                />
+            ) : null}
+            {first && context.jwLibraryHref(first, last) ? (
+               <a
+                  className="ui-button ui-button--ghost ui-button--sm"
+                  href={context.jwLibraryHref(first, last) as string}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={t('verse.action.openInJwLibraryHint', { verse: label })}
+               >
+                  <ExternalLink size={15} aria-hidden="true" />
+                  <span className="ui-button__label">{t('verse.action.openInJwLibrary')}</span>
+               </a>
             ) : null}
             <Button variant="ghost" size="sm" leading={<Copy size={15} />} onClick={() => context.onCopy(node.key)}>
                {t('verse.action.copyShort')}

@@ -50,6 +50,11 @@ test.describe('verse study', () => {
       await expect(list.getByRole('status')).toHaveText(/\d+ connections/);
       await expect(list.getByRole('article').first()).toBeVisible();
       expect(await list.getByRole('article').count()).toBeGreaterThan(10);
+
+      const jwLibrary = page.locator('.vs-studied__bar a[href^="https://www.jw.org/finder"]');
+
+      await expect(jwLibrary).toHaveAttribute('href', /[?&]bible=43003016(&|$)/);
+      await expect(jwLibrary).toHaveAttribute('target', '_blank');
    });
 
    test('studying a connection updates the URL and the trail; Back restores', async ({ page }, testInfo) => {

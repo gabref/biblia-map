@@ -1,4 +1,4 @@
-import { AArrowDown, AArrowUp, BookOpen, ChevronLeft, ChevronRight, Copy, NotebookPen, Rows3 } from 'lucide-react';
+import { AArrowDown, AArrowUp, BookOpen, ChevronLeft, ChevronRight, Copy, ExternalLink, NotebookPen, Rows3 } from 'lucide-react';
 import { Suspense, useState } from 'react';
 
 import type { NoteEditorProps } from '../../components/NoteEditor';
@@ -32,6 +32,8 @@ export interface StudiedVerseProps {
    next: VerseRef | undefined;
    params: RouteParams;
    chapterHref: string;
+   /** jw.org finder link that opens this verse in JW Library (or jw.org); `null` hides the action. */
+   jwLibraryHref: string | null;
    /** BCP 47 language of the scripture text, when known. */
    lang: string | undefined;
    /** Phone layout: icon-only secondary actions so the bar stays two rows. */
@@ -130,6 +132,7 @@ export function StudiedVerse({
    next,
    params,
    chapterHref,
+   jwLibraryHref,
    lang,
    compact,
    showContext,
@@ -204,6 +207,19 @@ export function StudiedVerse({
                <span className="ui-button__label">{t('verse.action.readInContext')}</span>
             </a>
             <SaveVerseButton verse={verse} label={verse.label} size="sm" appearance={compact ? 'icon' : 'button'} />
+            {jwLibraryHref ? (
+               <a
+                  className={cx('ui-button ui-button--ghost ui-button--sm', compact && 'ui-button--icon')}
+                  href={jwLibraryHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={compact ? t('verse.action.openInJwLibraryHint', { verse: verse.label }) : undefined}
+                  title={t('verse.action.openInJwLibraryHint', { verse: verse.label })}
+               >
+                  <ExternalLink size={15} aria-hidden="true" />
+                  {compact ? null : <span className="ui-button__label">{t('verse.action.openInJwLibrary')}</span>}
+               </a>
+            ) : null}
             <div className="vs-studied__note">
                <VerseNote key={verse.canonicalVerseId} verse={verse} compact={compact} />
             </div>

@@ -233,6 +233,8 @@ export const it: Partial<Messages> = {
    'verse.action.study': 'Studia {verse}',
    'verse.action.studyThis': 'Studia questo versetto',
    'verse.action.readInContext': 'Leggi nel contesto',
+   'verse.action.openInJwLibrary': 'Apri in JW Library',
+   'verse.action.openInJwLibraryHint': 'Apri {verse} in JW Library o su jw.org',
    'verse.action.copy': 'Copia {verse}',
    'verse.action.copyShort': 'Copia',
    'verse.toast.copied': '{verse} copiato',

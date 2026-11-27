@@ -237,6 +237,8 @@ export const en = {
    'verse.action.study': 'Study {verse}',
    'verse.action.studyThis': 'Study this verse',
    'verse.action.readInContext': 'Read in context',
+   'verse.action.openInJwLibrary': 'Open in JW Library',
+   'verse.action.openInJwLibraryHint': 'Open {verse} in JW Library or on jw.org',
    'verse.action.copy': 'Copy {verse}',
    'verse.action.copyShort': 'Copy',
    'verse.toast.copied': '{verse} copied',

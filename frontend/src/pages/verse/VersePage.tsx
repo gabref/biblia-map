@@ -18,6 +18,7 @@ import { useT } from '../../i18n';
 import { cx } from '../../lib/cx';
 import { prefersReducedMotion, withViewTransition } from '../../lib/motion';
 import { chapterHref, DEFAULT_VERSE, navigate, useRoute, type VerseLocation } from '../../routing/routes';
+import { jwFinderHref } from '../../routing/externalLinks';
 import { parseVerseKey, recordVisit, verseKey } from '../../study/store';
 import type { EdgeKindFilter, VerseRef } from '../../types/generated';
 import { readStoredValue, writeStoredValue } from '../../utils/storage';
@@ -439,6 +440,11 @@ function VerseWorkspace({ datasetId, base }: WorkspaceProps): React.ReactElement
       (verse: VerseRef): string => `${chapterHref(verse, params.ds ? { ds: params.ds } : undefined)}#v${verse.verseNumber}`,
       [ params.ds ],
    );
+   const jwLibraryHref = useCallback(
+      (first: VerseRef, last?: VerseRef): string | null =>
+         jwFinderHref(first.canonicalVerseId, { lang, publicationSymbol: base.manifest.publicationSymbol }, last?.canonicalVerseId),
+      [ base.manifest.publicationSymbol, lang ],
+   );
    const detailContext = useMemo<DetailContext>(
       () => ({
          datasetId,
@@ -450,12 +456,13 @@ function VerseWorkspace({ datasetId, base }: WorkspaceProps): React.ReactElement
          passageVerses,
          labelOf: (key) => itemsRef.current.get(key)?.label ?? null,
          chapterHref: readHref,
+         jwLibraryHref,
          onStudy: studyKey,
          onSelect: handleSelect,
          onCopy: copyKey,
          onNavigate: handleInternalLink,
       }),
-      [ base.manifest, bookMap, catalog, copyKey, datasetId, handleInternalLink, handleSelect, lang, params.ds, passageVerses, readHref, studyKey ],
+      [ base.manifest, bookMap, catalog, copyKey, datasetId, handleInternalLink, handleSelect, jwLibraryHref, lang, params.ds, passageVerses, readHref, studyKey ],
    );
    const renderDetail = useCallback(
       (item: ConnectionItem): React.ReactNode => <DetailPanel node={item.node} label={item.label} context={detailContext} />,
@@ -693,6 +700,7 @@ function VerseWorkspace({ datasetId, base }: WorkspaceProps): React.ReactElement
                   next={next}
                   params={params}
                   chapterHref={readHref(center)}
+                  jwLibraryHref={jwLibraryHref(center)}
                   lang={lang}
                   compact={!wide}
                   showContext={showContext}

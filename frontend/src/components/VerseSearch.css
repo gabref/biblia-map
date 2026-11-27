@@ -1,0 +1,342 @@
+/* Verse search: shell trigger, ⌘K palette and inline search box (owner: E-A). */
+
+/* Pin Tailwind's layer order: this file can be evaluated before styles/index.css (see read.css). */
+@layer theme, base, components, utilities;
+
+@layer components {
+   /* ---------- Search panel (shared) ---------- */
+   .verse-search {
+      position: relative;
+      display: grid;
+      min-width: 0;
+   }
+
+   .verse-search__field {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+   }
+
+   .verse-search__icon {
+      position: absolute;
+      left: var(--space-4);
+      color: var(--ink-3);
+      pointer-events: none;
+   }
+
+   .verse-search__input {
+      width: 100%;
+      min-width: 0;
+      min-height: var(--tap-min);
+      padding: 0 var(--space-10) 0 calc(var(--space-4) + 1.75rem);
+      color: var(--ink);
+      background: var(--surface-raised);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-md);
+      font-size: var(--text-md);
+      appearance: none;
+   }
+
+   .verse-search__input::-webkit-search-cancel-button {
+      display: none;
+   }
+
+   .verse-search__input::placeholder {
+      color: var(--ink-3);
+   }
+
+   .verse-search--lg .verse-search__input {
+      min-height: 3.5rem;
+      font-size: var(--text-lg);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-1);
+   }
+
+   .verse-search__clear {
+      position: absolute;
+      right: var(--space-2);
+      display: grid;
+      width: 2.25rem;
+      height: 2.25rem;
+      place-items: center;
+      color: var(--ink-3);
+      background: transparent;
+      border: 0;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+   }
+
+   .verse-search__clear:hover {
+      color: var(--ink);
+      background: var(--surface-hover);
+   }
+
+   .verse-search__esc {
+      position: absolute;
+      right: var(--space-4);
+   }
+
+   .verse-search__group {
+      margin: 0;
+      padding: var(--space-3) var(--space-4) var(--space-1);
+      color: var(--ink-3);
+      font-size: var(--text-2xs);
+      font-weight: 650;
+      letter-spacing: var(--tracking-caps);
+      text-transform: uppercase;
+   }
+
+   .verse-search__list {
+      display: grid;
+      gap: 2px;
+      margin: 0;
+      padding: var(--space-1) var(--space-2);
+      list-style: none;
+   }
+
+   .verse-search__list:empty {
+      display: none;
+   }
+
+   .verse-search__option {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: start;
+      gap: var(--space-3);
+      min-height: var(--tap-min);
+      padding: var(--space-3);
+      color: var(--ink-2);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      animation: fade-in var(--dur-fast) var(--ease-standard) backwards;
+      animation-delay: calc(min(var(--i, 0), 8) * 12ms);
+   }
+
+   .verse-search__option.is-active {
+      color: var(--ink);
+      background: var(--accent-soft);
+   }
+
+   .verse-search__option-icon {
+      display: flex;
+      padding-top: 2px;
+      color: var(--ink-3);
+   }
+
+   .verse-search__option.is-active .verse-search__option-icon {
+      color: var(--accent);
+   }
+
+   .verse-search__option-body {
+      display: grid;
+      gap: var(--space-1);
+      min-width: 0;
+   }
+
+   .verse-search__option-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+   }
+
+   .verse-search__preview {
+      display: -webkit-box;
+      overflow: hidden;
+      color: var(--ink-2);
+      font-size: var(--text-md);
+      line-height: var(--leading-snug);
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      animation: fade-in var(--dur-base) var(--ease-standard) backwards;
+   }
+
+   .verse-search__option-kind {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      padding-top: 2px;
+      color: var(--ink-3);
+      font-size: var(--text-xs);
+      white-space: nowrap;
+   }
+
+   .verse-search__empty {
+      margin: 0;
+      padding: var(--space-4);
+      color: var(--ink-3);
+      font-size: var(--text-sm);
+   }
+
+   /* Inline variant: results drop down over the page. */
+   .verse-search--inline .verse-search__popup {
+      position: absolute;
+      top: calc(100% + var(--space-2));
+      right: 0;
+      left: 0;
+      z-index: var(--z-sticky);
+      display: none;
+      max-height: min(70vh, 30rem);
+      overflow-y: auto;
+      background: var(--surface-raised);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-3);
+   }
+
+   .verse-search--inline .verse-search__popup.is-open {
+      display: block;
+      animation: sink-in var(--dur-base) var(--ease-enter) backwards;
+   }
+
+   /* ---------- Palette dialog ---------- */
+   .verse-palette {
+      position: fixed;
+      inset: 0 auto auto 0;
+      z-index: var(--z-overlay);
+      width: 100vw;
+      max-width: none;
+      height: 100dvh;
+      max-height: none;
+      margin: 0;
+      padding: 12vh var(--space-4) var(--space-4);
+      background: transparent;
+      border: 0;
+      overflow: hidden;
+   }
+
+   .verse-palette:not([open]) {
+      display: none;
+   }
+
+   .verse-palette[open] {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+   }
+
+   .verse-palette::backdrop {
+      background: var(--scrim);
+      backdrop-filter: blur(2px);
+      animation: fade-in var(--dur-base) var(--ease-standard) backwards;
+   }
+
+   .verse-palette.is-closing::backdrop {
+      animation: fade-out calc(var(--dur-base) * 0.7) var(--ease-exit) forwards;
+   }
+
+   .verse-palette__surface {
+      display: flex;
+      flex-direction: column;
+      width: min(640px, 100%);
+      max-height: min(620px, 80dvh);
+      overflow: hidden;
+      background: var(--surface-raised);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-3);
+      animation: palette-in var(--dur-slow) var(--ease-enter) backwards;
+   }
+
+   .verse-palette.is-closing .verse-palette__surface {
+      animation: palette-out calc(var(--dur-base) * 0.7) var(--ease-exit) forwards;
+   }
+
+   .verse-palette .verse-search {
+      min-height: 0;
+      grid-template-rows: auto minmax(0, 1fr);
+   }
+
+   .verse-palette .verse-search__field {
+      border-bottom: 1px solid var(--line);
+   }
+
+   .verse-palette .verse-search__input {
+      min-height: 3.5rem;
+      padding-right: calc(var(--space-4) + 2.5rem);
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      font-size: var(--text-lg);
+   }
+
+   .verse-palette .verse-search__input:focus-visible {
+      outline: none;
+   }
+
+   .verse-palette .verse-search__popup {
+      min-height: 0;
+      padding-bottom: var(--space-2);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+   }
+
+   .verse-palette__footer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2) var(--space-5);
+      padding: var(--space-2) var(--space-4);
+      color: var(--ink-3);
+      background: var(--surface);
+      border-top: 1px solid var(--line);
+      font-size: var(--text-xs);
+   }
+
+   .verse-palette__footer span {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+   }
+
+   @media (max-width: 760px) {
+      .verse-palette {
+         padding: var(--space-2);
+      }
+
+      .verse-palette__surface {
+         max-height: calc(100dvh - var(--space-4));
+      }
+
+      .verse-palette__footer {
+         display: none;
+      }
+
+      .verse-search__esc {
+         display: none;
+      }
+   }
+
+}
+
+@keyframes palette-in {
+   from {
+      opacity: 0;
+      translate: 0 -10px;
+      scale: 0.98;
+   }
+}
+
+@keyframes palette-out {
+   to {
+      opacity: 0;
+      translate: 0 -6px;
+      scale: 0.98;
+   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+   @keyframes palette-in {
+      from {
+         opacity: 0;
+      }
+   }
+
+   @keyframes palette-out {
+      to {
+         opacity: 0;
+      }
+   }
+
+   .verse-search__option {
+      animation: none;
+   }
+}

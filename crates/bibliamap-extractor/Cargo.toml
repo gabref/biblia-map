@@ -5,12 +5,14 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+default-run = "bibliamap-extractor"
 
 [dependencies]
 anyhow.workspace = true
 bibliamap-core = { path = "../bibliamap-core" }
 chrono.workspace = true
 clap.workspace = true
+ego-tree.workspace = true
 jwpub-reader = { path = "../jwpub-reader" }
 reqwest.workspace = true
 rusqlite.workspace = true

@@ -5,6 +5,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 
+pub mod aliases;
+
 pub const BOOK_COUNT: usize = 66;
 
 /// Testament classification for a Bible book.

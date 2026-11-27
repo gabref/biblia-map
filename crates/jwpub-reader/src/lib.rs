@@ -7,8 +7,14 @@ use std::{
    path::{Path, PathBuf},
 };
 
-use rusqlite::Connection;
+use aes::{
+   Aes128,
+   cipher::{BlockCipherDecrypt, KeyInit},
+};
+use flate2::read::ZlibDecoder;
+use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 use thiserror::Error;
 use zip::ZipArchive;
@@ -77,6 +83,12 @@ pub enum JWPUBError {
 
    #[error("manifest publication.fileName is not a plain file name: {0}")]
    UnsafeDatabaseName(String),
+
+   #[error("encrypted content is malformed: {0}")]
+   InvalidContent(&'static str),
+
+   #[error("publication metadata row is missing")]
+   MissingPublication,
 }
 
 /// Opens a JWPub archive and returns a SQLite connection backed by a temp file.
@@ -101,6 +113,118 @@ pub fn open_jwpub(path: &Path) -> Result<OpenedJWPUB, JWPUBError> {
       connection,
       _temp_dir: temp_dir,
    })
+}
+
+/// XOR mask applied to the SHA-256 of the publication card to derive the content key.
+const CONTENT_KEY_MASK: [u8; 32] = [
+   0x11, 0xcb, 0xb5, 0x58, 0x7e, 0x32, 0x84, 0x6d, 0x4c, 0x26, 0x79, 0x0c, 0x63, 0x3d, 0xa2, 0x89,
+   0xf6, 0x6f, 0xe5, 0x84, 0x2a, 0x3a, 0x58, 0x5c, 0xe1, 0xbc, 0x3a, 0x29, 0x4a, 0xf5, 0xad, 0xa7,
+];
+
+/// Key material for the `Content` blobs of a JWPub database (documents, verse commentaries,
+/// footnotes). Blobs are AES-128-CBC encrypted (PKCS#7 padding) zlib streams; the key and IV are
+/// derived from the publication "card" `<MepsLanguageIndex>_<Symbol>_<Year>[_<IssueTagNumber>]`.
+#[derive(Clone)]
+pub struct ContentKey {
+   cipher: Aes128,
+   iv: [u8; 16],
+}
+
+impl std::fmt::Debug for ContentKey {
+   fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+      formatter.write_str("ContentKey(..)")
+   }
+}
+
+impl ContentKey {
+   /// Derives the key from a publication card such as `0_nwtsty_2026`.
+   pub fn from_publication_card(card: &str) -> Self {
+      let digest = Sha256::digest(card.as_bytes());
+      let mut material = [0_u8; 32];
+
+      for (index, byte) in material.iter_mut().enumerate() {
+         *byte = digest[index] ^ CONTENT_KEY_MASK[index];
+      }
+
+      let mut iv = [0_u8; 16];
+      iv.copy_from_slice(&material[16..]);
+
+      Self {
+         cipher: Aes128::new_from_slice(&material[..16]).expect("AES-128 key is 16 bytes"),
+         iv,
+      }
+   }
+
+   /// Reads the publication card from the database's `Publication` table.
+   pub fn from_connection(connection: &Connection) -> Result<Self, JWPUBError> {
+      let (language, symbol, year, issue_tag) = connection
+         .query_row(
+            "SELECT MepsLanguageIndex, Symbol, Year, IssueTagNumber FROM Publication LIMIT 1",
+            [],
+            |row| {
+               Ok((
+                  row.get::<_, i64>(0)?,
+                  row.get::<_, String>(1)?,
+                  row.get::<_, i64>(2)?,
+                  row.get::<_, Option<String>>(3)?,
+               ))
+            },
+         )
+         .optional()?
+         .ok_or(JWPUBError::MissingPublication)?;
+
+      Ok(Self::from_publication_card(&publication_card(
+         language,
+         &symbol,
+         year,
+         issue_tag.as_deref(),
+      )))
+   }
+
+   /// Decrypts and inflates one `Content` blob into its HTML text.
+   pub fn decrypt(&self, blob: &[u8]) -> Result<String, JWPUBError> {
+      if blob.is_empty() || !blob.len().is_multiple_of(16) {
+         return Err(JWPUBError::InvalidContent("length is not a multiple of 16"));
+      }
+
+      let mut plain = Vec::with_capacity(blob.len());
+      let mut previous = self.iv;
+
+      for chunk in blob.as_chunks::<16>().0 {
+         let mut block = aes::Block::from(*chunk);
+         self.cipher.decrypt_block(&mut block);
+         plain.extend(block.iter().zip(previous).map(|(byte, mask)| byte ^ mask));
+         previous.copy_from_slice(chunk);
+      }
+
+      let padding = usize::from(*plain.last().expect("plain text is not empty"));
+      if padding == 0 || padding > 16 || padding > plain.len() {
+         return Err(JWPUBError::InvalidContent("bad padding"));
+      }
+      plain.truncate(plain.len() - padding);
+
+      let mut html = String::new();
+      ZlibDecoder::new(plain.as_slice())
+         .read_to_string(&mut html)
+         .map_err(|_| JWPUBError::InvalidContent("zlib stream is invalid"))?;
+
+      Ok(html)
+   }
+}
+
+/// Builds the publication card used for content key derivation.
+pub fn publication_card(
+   meps_language_index: i64,
+   symbol: &str,
+   year: i64,
+   issue_tag_number: Option<&str>,
+) -> String {
+   match issue_tag_number.map(str::trim) {
+      Some(tag) if !tag.is_empty() && tag != "0" => {
+         format!("{meps_language_index}_{symbol}_{year}_{tag}")
+      }
+      _ => format!("{meps_language_index}_{symbol}_{year}"),
+   }
 }
 
 fn read_manifest<R: Read + std::io::Seek>(
@@ -156,6 +280,66 @@ fn validate_database_name(file_name: &str) -> Result<(), JWPUBError> {
 #[cfg(test)]
 mod tests {
    use super::*;
+   use aes::cipher::BlockCipherEncrypt;
+   use flate2::{Compression, write::ZlibEncoder};
+
+   fn encrypt_for_test(card: &str, html: &str) -> Vec<u8> {
+      let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+      encoder
+         .write_all(html.as_bytes())
+         .expect("zlib should write");
+      let mut plain = encoder.finish().expect("zlib should finish");
+      let padding = 16 - plain.len() % 16;
+      plain.extend(std::iter::repeat_n(padding as u8, padding));
+
+      let digest = Sha256::digest(card.as_bytes());
+      let material = (0..32)
+         .map(|index| digest[index] ^ CONTENT_KEY_MASK[index])
+         .collect::<Vec<_>>();
+      let cipher = Aes128::new_from_slice(&material[..16]).expect("key should init");
+      let mut previous = material[16..].to_vec();
+      let mut encrypted = Vec::new();
+
+      for chunk in plain.as_chunks::<16>().0 {
+         let xored = chunk
+            .iter()
+            .zip(&previous)
+            .map(|(left, right)| left ^ right)
+            .collect::<Vec<_>>();
+         let mut block = aes::Block::try_from(xored.as_slice()).expect("16 bytes");
+         cipher.encrypt_block(&mut block);
+         previous = block.to_vec();
+         encrypted.extend_from_slice(&block);
+      }
+
+      encrypted
+   }
+
+   #[test]
+   fn decrypts_content_blobs() {
+      let html = r#"<p data-pid="7"><strong>Christ:</strong> “Anointed One.”</p>"#;
+      let blob = encrypt_for_test("0_nwtsty_2026", html);
+
+      let key = ContentKey::from_publication_card("0_nwtsty_2026");
+      assert_eq!(key.decrypt(&blob).expect("blob should decrypt"), html);
+
+      let wrong_key = ContentKey::from_publication_card("4_nwtsty_2026");
+      assert!(wrong_key.decrypt(&blob).is_err());
+      assert!(key.decrypt(&blob[..15]).is_err());
+   }
+
+   #[test]
+   fn builds_publication_cards() {
+      assert_eq!(
+         publication_card(0, "nwtsty", 2026, Some("0")),
+         "0_nwtsty_2026"
+      );
+      assert_eq!(publication_card(4, "nwtsty", 2026, None), "4_nwtsty_2026");
+      assert_eq!(
+         publication_card(0, "w", 2024, Some("20240100")),
+         "0_w_2024_20240100"
+      );
+   }
    use std::io::Write;
    use tempfile::NamedTempFile;
    use zip::{ZipWriter, write::SimpleFileOptions};

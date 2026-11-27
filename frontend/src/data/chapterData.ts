@@ -3,26 +3,32 @@
  *
  * A chapter view needs, for one book: the verse text, the source + target adjacency (both
  * cached by `generated.ts`), and the verse index to resolve connection targets to refs.
- * Three OPTIONAL files from Epic E-G are feature-detected via `manifest.json` `features`
- * and used when present; every consumer has a fallback computed from the adjacency:
+ * OPTIONAL files from Epic E-G are feature-detected via `manifest.json` `features` and used
+ * when present; every consumer has a fallback computed from the adjacency:
  *
- * - `stats.verse-degree.json`         per-verse degree → ranks "top references" in previews
- * - `matrices/chapter/<NN>.<slug>.json` chapter → target-book counts → chapter summary (outgoing)
- * - `study-notes/<NN>.<slug>.json`    study-note text per verse → shown in the verse panel
+ * - `stats.verse-degree.json` (`verse-degree`)         per-verse degree → ranks "top references"
+ * - `study-notes/<NN>.<slug>.json` (`study-note-text`) study-note text per verse → verse panel
  *
- * The expected shapes of those files are guesses until E-G merges; they are isolated in the
- * "E-G optional files" section below, behind tolerant normalizers that return `null` for
- * anything unrecognized (so a shape mismatch silently falls back instead of breaking).
+ * `matrices/chapter/<NN>.<slug>.json` (`chapter-matrices`) is parsed by `chapterMatrixCounts`
+ * but not used for the chapter summary: it counts raw edges (a reference that is both a cross
+ * reference and in a study note counts twice) and has no per-chapter breakdown, while the
+ * summary dedupes like the badges and the adjacency is loaded anyway.
+ *
+ * The normalizers below are tolerant: anything unrecognized returns `null`, so a shape
+ * mismatch silently falls back instead of breaking.
  */
 import type {
    AdjacentEdge,
    Book,
+   ChapterMatrix,
    DatasetManifest,
    DirectionMode,
    EdgeKindCode,
    EdgeKindFilter,
    SourceAdjacency,
+   StudyNotesBook,
    TargetAdjacency,
+   VerseDegree,
    VerseIndex,
    VerseRef,
    VerseTextBook,
@@ -41,36 +47,16 @@ import {
 } from './generated';
 
 // =====================================================================================
-// E-G optional files: expected shapes (align these once E-G merges)
+// E-G optional files
 // =====================================================================================
 
-/** `stats.verse-degree.json` (G2): arrays indexed by jwpubVerseId. */
-export interface VerseDegreeFile {
-   in: number[];
-   out: number[];
-   inStudy?: number[];
-   outStudy?: number[];
-}
-
 /**
- * `matrices/chapter/<NN>.<slug>.json` (G3). Accepted variants (rows are per source chapter,
- * columns are per target book 1..66, values are outgoing reference counts):
- * - `number[][]` (row i = chapter i+1, column j = book j+1)
- * - `Record<chapter, number[] | Record<bookNumber, number>>`
- * - either of the above wrapped as `{ chapters: … }` or split by kind as
- *   `{ combined?: …, crossrefs?: …, 'study-notes'?: …, studyNotes?: … }`
+ * `stats.verse-degree.json`: arrays indexed by jwpubVerseId. `in`/`out` count cross references,
+ * `inStudy`/`outStudy` study-note references; `in*` counts every verse inside a cited range.
  */
-export type ChapterMatrixFile = unknown;
+export type VerseDegreeFile = Pick<VerseDegree, 'in' | 'out' | 'inStudy' | 'outStudy'>;
 
-/**
- * `study-notes/<NN>.<slug>.json`. Accepted variants:
- * - `Record<jwpubVerseId, string | string[] | {text: string}[] | {text: string}>`
- * - `{ notes|verses: <the map above> }`
- * - `Array<{ verseId|jwpubVerseId|source: number; text: string }>`
- */
-export type StudyNotesFile = unknown;
-
-/** Normalized per-chapter counts: target book number → outgoing count. */
+/** Normalized per-chapter counts: other book number → reference count. */
 export type BookCountMap = Map<number, number>;
 
 export interface OptionalFeatures {
@@ -79,21 +65,20 @@ export interface OptionalFeatures {
    studyNotes: boolean;
 }
 
-/** Candidate `features` names per file (E-G has not fixed the strings yet). */
-const FEATURE_NAMES: Record<keyof OptionalFeatures, readonly string[]> = {
-   verseDegree: [ 'verse-degree', 'stats.verse-degree', 'verseDegree' ],
-   chapterMatrix: [ 'chapter-matrices', 'chapter-matrix', 'matrices.chapter', 'matrices/chapter', 'chapterMatrix' ],
-   studyNotes: [ 'study-notes', 'study-note-text', 'studyNotes', 'study-notes-text' ],
+/** `features` names written by the extractor (`DatasetFeature`). */
+const FEATURE_NAMES: Record<keyof OptionalFeatures, string> = {
+   verseDegree: 'verse-degree',
+   chapterMatrix: 'chapter-matrices',
+   studyNotes: 'study-note-text',
 };
 
 export function detectFeatures(manifest: Pick<DatasetManifest, 'datasetId'> & { features?: unknown }): OptionalFeatures {
    const list = Array.isArray(manifest.features) ? manifest.features.filter((item): item is string => typeof item === 'string') : [];
-   const has = (names: readonly string[]): boolean => names.some((name) => list.includes(name));
 
    return {
-      verseDegree: has(FEATURE_NAMES.verseDegree),
-      chapterMatrix: has(FEATURE_NAMES.chapterMatrix),
-      studyNotes: has(FEATURE_NAMES.studyNotes),
+      verseDegree: list.includes(FEATURE_NAMES.verseDegree),
+      chapterMatrix: list.includes(FEATURE_NAMES.chapterMatrix),
+      studyNotes: list.includes(FEATURE_NAMES.studyNotes),
    };
 }
 
@@ -107,158 +92,111 @@ export function normalizeVerseDegree(raw: unknown): VerseDegreeFile | null {
    }
 
    const record = raw as Record<string, unknown>;
-   const incoming = record.in ?? record.incoming;
-   const outgoing = record.out ?? record.outgoing;
+   const arrays = [ record.in, record.out, record.inStudy, record.outStudy ];
 
-   if (!isNumberArray(incoming) || !isNumberArray(outgoing)) {
+   if (!arrays.every(isNumberArray)) {
       return null;
    }
 
-   return {
-      in: incoming,
-      out: outgoing,
-      ...(isNumberArray(record.inStudy) ? { inStudy: record.inStudy } : {}),
-      ...(isNumberArray(record.outStudy) ? { outStudy: record.outStudy } : {}),
-   };
-}
+   const [ incoming, outgoing, inStudy, outStudy ] = arrays as number[][];
 
-/** Total degree (in + out) of a verse in the precomputed file, or `null` if out of range. */
-export function verseDegreeTotal(degree: VerseDegreeFile, verseId: number): number | null {
-   const incoming = degree.in[verseId];
-   const outgoing = degree.out[verseId];
-
-   if (incoming === undefined && outgoing === undefined) {
-      return null;
-   }
-
-   return (incoming ?? 0) + (outgoing ?? 0);
-}
-
-function rowToCounts(row: unknown): BookCountMap | null {
-   const counts: BookCountMap = new Map();
-
-   if (isNumberArray(row)) {
-      row.forEach((count, index) => {
-         if (count > 0) counts.set(index + 1, count);
-      });
-      return counts;
-   }
-
-   if (row && typeof row === 'object' && !Array.isArray(row)) {
-      for (const [ key, value ] of Object.entries(row as Record<string, unknown>)) {
-         const bookNumber = Number(key);
-
-         if (Number.isInteger(bookNumber) && bookNumber >= 1 && typeof value === 'number' && value > 0) {
-            counts.set(bookNumber, value);
-         }
-      }
-      return counts;
-   }
-
-   return null;
-}
-
-function chapterRow(rows: unknown, chapterNumber: number): BookCountMap | null {
-   if (Array.isArray(rows)) {
-      return rows.length >= chapterNumber ? rowToCounts(rows[chapterNumber - 1]) : null;
-   }
-
-   if (rows && typeof rows === 'object') {
-      const record = rows as Record<string, unknown>;
-
-      if ('chapters' in record) {
-         return chapterRow(record.chapters, chapterNumber);
-      }
-
-      const row = record[String(chapterNumber)];
-
-      return row === undefined ? null : rowToCounts(row);
-   }
-
-   return null;
+   return { in: incoming, out: outgoing, inStudy, outStudy };
 }
 
 /**
- * Outgoing target-book counts for one chapter from the chapter matrix file, for the given
- * edge kind. `null` when the file does not carry that kind or its shape is unrecognized.
+ * Degree of a verse in the precomputed file for an edge kind (default: both kinds, both
+ * directions), or `null` if the verse id is out of range.
  */
-export function chapterMatrixCounts(raw: ChapterMatrixFile, chapterNumber: number, kind: EdgeKindFilter): BookCountMap | null {
+export function verseDegreeTotal(degree: VerseDegreeFile, verseId: number, kind: EdgeKindFilter = 'combined'): number | null {
+   if (!Number.isInteger(verseId) || verseId < 0 || verseId >= degree.in.length) {
+      return null;
+   }
+
+   const crossrefs = (degree.in[verseId] ?? 0) + (degree.out[verseId] ?? 0);
+   const studyNotes = (degree.inStudy[verseId] ?? 0) + (degree.outStudy[verseId] ?? 0);
+
+   if (kind === 'crossrefs') return crossrefs;
+   if (kind === 'study-notes') return studyNotes;
+   return crossrefs + studyNotes;
+}
+
+const MATRIX_COLUMN: Record<EdgeKindFilter, 1 | 2 | 3> = { crossrefs: 1, 'study-notes': 2, combined: 3 };
+
+function isChapterBookCount(value: unknown): value is [number, number, number, number] {
+   return isNumberArray(value) && value.length === 4;
+}
+
+/**
+ * Other-book counts for one chapter from a `matrices/chapter/<NN>.<slug>.json` file
+ * (`{outgoing|incoming: [otherBook, crossrefs, studyNotes, combined][][]}`) for an edge kind.
+ * Counts raw edges (not deduped across kinds). `null` when the chapter is out of range or the
+ * shape is unrecognized.
+ */
+export function chapterMatrixCounts(
+   raw: unknown,
+   chapterNumber: number,
+   kind: EdgeKindFilter,
+   direction: 'outgoing' | 'incoming' = 'outgoing',
+): BookCountMap | null {
    if (!raw || typeof raw !== 'object') {
       return null;
    }
 
-   const record = raw as Record<string, unknown>;
-   const kindKeys: Record<EdgeKindFilter, string[]> = {
-      combined: [ 'combined', 'all' ],
-      crossrefs: [ 'crossrefs', 'crossReferences', 'cross_reference' ],
-      'study-notes': [ 'study-notes', 'studyNotes', 'study_note_reference' ],
-   };
-   const isKindSplit = Object.values(kindKeys).flat().some((key) => key in record);
+   const rows = (raw as Partial<ChapterMatrix>)[direction];
+   const row: unknown = Array.isArray(rows) ? rows[chapterNumber - 1] : undefined;
 
-   if (isKindSplit) {
-      const key = kindKeys[kind].find((candidate) => candidate in record);
-
-      return key ? chapterRow(record[key], chapterNumber) : null;
+   if (!Array.isArray(row) || !row.every(isChapterBookCount)) {
+      return null;
    }
 
-   // Unsplit file: assume combined counts only.
-   return kind === 'combined' ? chapterRow(raw, chapterNumber) : null;
+   const column = MATRIX_COLUMN[kind];
+   const counts: BookCountMap = new Map();
+
+   for (const entry of row) {
+      if (entry[column] > 0) counts.set(entry[0], entry[column]);
+   }
+
+   return counts;
 }
 
-function noteTexts(value: unknown): string[] {
-   if (typeof value === 'string') {
-      return value.trim() ? [ value.trim() ] : [];
+/** Display strings of one study note: one per paragraph, with its bold lemma as a lead-in. */
+function noteTexts(note: unknown): string[] {
+   const paragraphs = note && typeof note === 'object' ? (note as Record<string, unknown>).paragraphs : undefined;
+
+   if (!Array.isArray(paragraphs)) {
+      return [];
    }
 
-   if (Array.isArray(value)) {
-      return value.flatMap(noteTexts);
-   }
+   return paragraphs.flatMap((paragraph): string[] => {
+      if (!paragraph || typeof paragraph !== 'object') return [];
+      const { lemma, text } = paragraph as Record<string, unknown>;
+      const body = typeof text === 'string' ? text.trim() : '';
 
-   if (value && typeof value === 'object') {
-      const text = (value as Record<string, unknown>).text ?? (value as Record<string, unknown>).content;
+      if (!body) return [];
 
-      return typeof text === 'string' && text.trim() ? [ text.trim() ] : [];
-   }
-
-   return [];
+      return [ typeof lemma === 'string' && lemma.trim() ? `${lemma.trim()}: ${body}` : body ];
+   });
 }
 
-/** jwpubVerseId → study-note paragraphs. `null` when the shape is unrecognized. */
-export function normalizeStudyNotes(raw: StudyNotesFile): Map<number, string[]> | null {
+/**
+ * `study-notes/<NN>.<slug>.json` (jwpubVerseId → `[{commentaryId, heading, paragraphs:
+ * [{lemma?, text}]}]`) → jwpubVerseId → paragraph strings. `null` when the shape is unrecognized.
+ */
+export function normalizeStudyNotes(raw: unknown): Map<number, string[]> | null {
+   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return null;
+   }
+
    const notes = new Map<number, string[]>();
 
-   if (Array.isArray(raw)) {
-      for (const item of raw) {
-         if (!item || typeof item !== 'object') continue;
-         const record = item as Record<string, unknown>;
-         const id = record.verseId ?? record.jwpubVerseId ?? record.source;
-         const texts = noteTexts(record);
-
-         if (typeof id === 'number' && texts.length > 0) {
-            notes.set(id, [ ...(notes.get(id) ?? []), ...texts ]);
-         }
-      }
-      return notes;
-   }
-
-   if (!raw || typeof raw !== 'object') {
-      return null;
-   }
-
-   const record = raw as Record<string, unknown>;
-   const map = (record.notes ?? record.verses ?? record) as Record<string, unknown>;
-
-   if (!map || typeof map !== 'object' || Array.isArray(map)) {
-      return Array.isArray(map) ? normalizeStudyNotes(map) : null;
-   }
-
-   for (const [ key, value ] of Object.entries(map)) {
+   for (const [ key, value ] of Object.entries(raw as StudyNotesBook)) {
       const id = Number(key);
-      const texts = noteTexts(value);
 
-      if (Number.isInteger(id) && texts.length > 0) {
-         notes.set(id, texts);
-      }
+      if (!Number.isInteger(id) || !Array.isArray(value)) continue;
+
+      const texts = value.flatMap(noteTexts);
+
+      if (texts.length > 0) notes.set(id, texts);
    }
 
    return notes;
@@ -636,8 +574,6 @@ export interface ChapterData {
    hasStudyNoteRefs: boolean;
    /** Precomputed degree (E-G), `null` when absent. */
    verseDegree: VerseDegreeFile | null;
-   /** Raw chapter matrix file for the book (E-G), `null` when absent. */
-   chapterMatrix: ChapterMatrixFile | null;
    /** Study-note text per verse (E-G), `null` when absent. */
    studyNotes: Map<number, string[]> | null;
 }
@@ -697,12 +633,11 @@ export async function loadChapterData(datasetId: string, bookNumber: number, cha
 
    const features = detectFeatures(manifest as DatasetManifest & { features?: unknown });
    const fileName = bookFileName(book);
-   const [ text, source, target, degreeRaw, matrixRaw, notesRaw ] = await Promise.all([
+   const [ text, source, target, degreeRaw, notesRaw ] = await Promise.all([
       manifest.hasVerseText ? loadVerseTextBook(datasetId, book).catch(() => null) : Promise.resolve(null),
       loadSourceAdjacency(datasetId, book),
       loadTargetAdjacency(datasetId, book),
       features.verseDegree ? loadOptionalJson(datasetId, 'stats.verse-degree.json') : Promise.resolve(null),
-      features.chapterMatrix ? loadOptionalJson(datasetId, `matrices/chapter/${fileName}`) : Promise.resolve(null),
       features.studyNotes ? loadOptionalJson(datasetId, `study-notes/${fileName}`) : Promise.resolve(null),
    ]);
 
@@ -717,24 +652,12 @@ export async function loadChapterData(datasetId: string, bookNumber: number, cha
       verseIndex,
       features,
       verseDegree: normalizeVerseDegree(degreeRaw),
-      chapterMatrix: matrixRaw ?? null,
       studyNotes: notesRaw ? normalizeStudyNotes(notesRaw) : null,
    };
 }
 
-/**
- * Chapter summary for the current filters: the E-G matrix when it answers the question exactly
- * (outgoing only, kind present), otherwise aggregated from the adjacency.
- */
+/** Chapter summary for the current filters, aggregated from the adjacency (deduped like the badges). */
 export function chapterSummary(data: ChapterData, kind: EdgeKindFilter, direction: DirectionMode): ChapterSummary {
-   if (direction === 'outgoing' && data.chapterMatrix) {
-      const counts = chapterMatrixCounts(data.chapterMatrix, data.chapterNumber, kind);
-
-      if (counts) {
-         return summaryFromMatrix(counts);
-      }
-   }
-
    return summarizeChapter(data.verses, data.verseIndex, kind, direction);
 }
 

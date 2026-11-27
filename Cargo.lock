@@ -135,6 +135,7 @@ dependencies = [
  "bibliamap-core",
  "chrono",
  "clap",
+ "ego-tree",
  "jwpub-reader",
  "reqwest",
  "rusqlite",
@@ -1033,9 +1034,12 @@ dependencies = [
 name = "jwpub-reader"
 version = "0.1.0"
 dependencies = [
+ "aes",
+ "flate2",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror",
  "zip",

@@ -22,6 +22,8 @@ export interface DatasetManifest {
    schemaVersion: number;
    availableEdgeKinds: string[];
    hasVerseText: boolean;
+   /** Optional file families present in this dataset. Absent on datasets generated before Sprint 2. */
+   features?: DatasetFeature[];
 }
 
 export interface Book {
@@ -173,3 +175,160 @@ export interface VerseText {
 }
 
 export type VerseTextBook = Record<string, VerseText>;
+
+// ---------------------------------------------------------------------------
+// Sprint 2 (E-G) optional generated files. Feature-detect with `manifest.features`
+// (or `hasDatasetFeature`) before loading; older datasets do not have them.
+// ---------------------------------------------------------------------------
+
+export type DatasetFeature =
+   | 'search-index'
+   | 'verse-degree'
+   | 'chapter-matrices'
+   | 'study-note-text'
+   | 'footnote-text'
+   | 'components';
+
+/**
+ * One chapter of a book in `search-index.json`: `[firstJwpubVerseId, firstVerseNumber, verseCount]`.
+ * Verse `v` of the chapter has `jwpubVerseId = firstJwpubVerseId + (v - firstVerseNumber)` for
+ * `firstVerseNumber <= v < firstVerseNumber + verseCount`. Index in `chapters` is `chapter - 1`.
+ */
+export type SearchChapter = [firstJwpubVerseId: number, firstVerseNumber: number, verseCount: number];
+
+export interface SearchBook {
+   bookNumber: number;
+   slug: string;
+   /** Localized name (dataset language). */
+   name: string;
+   shortName: string;
+   testament: Testament;
+   /** Display abbreviations/aliases (dataset language first, then English for non-English datasets). */
+   aliases: string[];
+   /**
+    * Normalized lookup keys, unique across books. Normalize input the same way (`normalizeSearchKey`):
+    * `s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')`
+    */
+   keys: string[];
+   chapters: SearchChapter[];
+}
+
+export interface SearchIndex {
+   schemaVersion: number;
+   language: string;
+   books: SearchBook[];
+   /** Verses not covered by a chapter run: `[jwpubVerseId, bookNumber, chapter, verse]`. Normally empty. */
+   irregularVerses: Array<[number, number, number, number]>;
+}
+
+/**
+ * `stats.verse-degree.json`. Arrays are indexed directly by `jwpubVerseId` (`length` = max id + 1;
+ * non-verse ids hold 0). `out*`: edges whose source is the verse. `in*`: edges whose cited range
+ * contains the verse (same as the verse's entries in `adjacency/target`). `in`/`out` = cross
+ * references (kind 0), `inStudy`/`outStudy` = study-note references (kind 1). Combined = sum.
+ */
+export interface VerseDegree {
+   schemaVersion: number;
+   index: 'jwpubVerseId';
+   length: number;
+   in: number[];
+   out: number[];
+   inStudy: number[];
+   outStudy: number[];
+}
+
+/** `[otherBookNumber, crossrefs, studyNotes, combined]` */
+export type ChapterBookCount = [bookNumber: number, crossrefs: number, studyNotes: number, combined: number];
+
+/**
+ * `matrices/chapter/<NN>.<slug>.json`. `outgoing[chapter - 1]`: counts by target book for edges whose
+ * source verse is in the chapter. `incoming[chapter - 1]`: counts by source book for edges whose cited
+ * range starts in the chapter. Each edge counts once (like `matrices/book.*.json`).
+ */
+export interface ChapterMatrix {
+   bookNumber: number;
+   chapters: number;
+   outgoing: ChapterBookCount[][];
+   incoming: ChapterBookCount[][];
+}
+
+/** Bible reference span: `[start, end, fromJwpubVerseId, toJwpubVerseId]`; UTF-16 offsets into `text`, end exclusive. */
+export type NoteRefSpan = [start: number, end: number, fromJwpubVerseId: number, toJwpubVerseId: number];
+
+export interface NoteParagraph {
+   /** Paragraph ordinal; matches `paragraphOrdinal` on study-note edges. */
+   pid?: number;
+   /** Bold lead-in phrase of a study note, without the trailing colon. */
+   lemma?: string;
+   /** Plain text; `\n` marks line breaks. */
+   text: string;
+   refs?: NoteRefSpan[];
+}
+
+export interface StudyNote {
+   /** Matches `commentaryId` on study_note_reference edges. */
+   commentaryId: number;
+   heading: string;
+   paragraphs: NoteParagraph[];
+}
+
+/** `study-notes/<NN>.<slug>.json`: jwpubVerseId → study notes on that verse. */
+export type StudyNotesBook = Record<string, StudyNote[]>;
+
+export interface Footnote {
+   footnoteId: number;
+   paragraphs: NoteParagraph[];
+}
+
+/** `footnotes/<NN>.<slug>.json`: jwpubVerseId → translation footnotes on that verse. */
+export type FootnotesBook = Record<string, Footnote[]>;
+
+/**
+ * `stats.components.json`: precomputed `buildRelationshipComponents` results per edge filter
+ * (`RelationshipComponentsSummary` in `graph/relationshipComponents.ts`). Difference: `components`
+ * omits single-verse blocks; `blockCount` and `isolatedVerses` still count them.
+ */
+export interface PrecomputedRelationshipComponents {
+   totalVerses: number;
+   totalEdges: number;
+   blockCount: number;
+   isolatedVerses: number;
+   largestBlock: PrecomputedRelationshipComponent | null;
+   components: PrecomputedRelationshipComponent[];
+}
+
+export interface PrecomputedRelationshipComponent {
+   id: number;
+   size: number;
+   percent: number;
+   edgeCount: number;
+   sampleVerses: string[];
+   topBooks: Array<{ bookNumber: number; name: string; count: number }>;
+}
+
+export type ComponentsStats = Record<EdgeKindFilter, PrecomputedRelationshipComponents>;
+
+/** `/generated/compare/index.json`: edition pairs with reference-set diffs. */
+export interface CompareIndex {
+   schemaVersion: number;
+   pairs: ComparePair[];
+}
+
+export interface ComparePair {
+   /** Directory name: `<a>__<b>`. */
+   id: string;
+   a: string;
+   b: string;
+   /** Edge kind compared (cross references only). */
+   kind: 'cross_reference';
+   sharedReferences: number;
+   onlyA: number;
+   onlyB: number;
+}
+
+/**
+ * `/generated/compare/<a>__<b>/<NN>.<slug>.json`: canonicalVerseId (source verse, `BBCCCVVV`) →
+ * `[shared, onlyA, onlyB]`, where `shared` is a count and `onlyA`/`onlyB` list target canonical verse
+ * ids (range starts) cited by only one edition. Verses with identical reference sets are omitted.
+ */
+export type CompareBook = Record<string, [shared: number, onlyA: number[], onlyB: number[]]>;

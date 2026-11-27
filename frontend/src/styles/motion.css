@@ -1,0 +1,274 @@
+/*
+ * Motion utilities. Durations/easings are tokens (tokens.css) and collapse under
+ * prefers-reduced-motion; the keyframes below additionally drop all movement there,
+ * leaving only a short opacity fade.
+ */
+
+@keyframes fade-in {
+   from {
+      opacity: 0;
+   }
+}
+
+@keyframes fade-out {
+   to {
+      opacity: 0;
+   }
+}
+
+@keyframes rise-in {
+   from {
+      opacity: 0;
+      translate: 0 8px;
+   }
+}
+
+@keyframes sink-in {
+   from {
+      opacity: 0;
+      translate: 0 -6px;
+   }
+}
+
+@keyframes scale-in {
+   from {
+      opacity: 0;
+      scale: 0.96;
+   }
+}
+
+@keyframes slide-in-right {
+   from {
+      translate: 100% 0;
+   }
+}
+
+@keyframes slide-in-left {
+   from {
+      translate: -100% 0;
+   }
+}
+
+@keyframes slide-in-bottom {
+   from {
+      translate: 0 100%;
+   }
+}
+
+@keyframes shimmer {
+   from {
+      background-position: 180% 0;
+   }
+   to {
+      background-position: -80% 0;
+   }
+}
+
+@keyframes pulse-soft {
+   50% {
+      opacity: 0.55;
+   }
+}
+
+@keyframes draw-stroke {
+   from {
+      stroke-dashoffset: var(--path-length, 1);
+   }
+   to {
+      stroke-dashoffset: 0;
+   }
+}
+
+@keyframes grow-x {
+   from {
+      scale: 0 1;
+   }
+}
+
+/* Legacy keyframe name used by older rules. */
+@keyframes reveal {
+   from {
+      opacity: 0;
+      translate: 0 8px;
+   }
+}
+
+@layer components {
+   /* Entrances. `backwards` fill so no transform lingers (keeps position:fixed children correct). */
+   .anim-fade-in {
+      animation: fade-in var(--dur-base) var(--ease-standard) backwards;
+   }
+
+   .anim-rise-in {
+      animation: rise-in var(--dur-slow) var(--ease-enter) backwards;
+   }
+
+   .anim-sink-in {
+      animation: sink-in var(--dur-base) var(--ease-enter) backwards;
+   }
+
+   .anim-scale-in {
+      animation: scale-in var(--dur-base) var(--ease-enter) backwards;
+   }
+
+   /* Bars and meters grow from their baseline. */
+   .anim-grow-x {
+      transform-origin: left center;
+      animation: grow-x var(--dur-slower) var(--ease-enter) backwards;
+   }
+
+   /* SVG paths: set pathLength="1" on the element, then add this class. */
+   .anim-draw {
+      stroke-dasharray: 1;
+      animation: draw-stroke var(--dur-slower) var(--ease-standard) backwards;
+      --path-length: 1;
+   }
+
+   /*
+    * Stagger children: add .stagger to the parent, and either set --i on each child
+    * or rely on the first twelve :nth-child slots below.
+    */
+   .stagger > * {
+      animation: rise-in var(--dur-slow) var(--ease-enter) backwards;
+      animation-delay: calc(var(--i, 0) * var(--stagger));
+   }
+
+   .stagger > :nth-child(1) { --i: 0; }
+   .stagger > :nth-child(2) { --i: 1; }
+   .stagger > :nth-child(3) { --i: 2; }
+   .stagger > :nth-child(4) { --i: 3; }
+   .stagger > :nth-child(5) { --i: 4; }
+   .stagger > :nth-child(6) { --i: 5; }
+   .stagger > :nth-child(7) { --i: 6; }
+   .stagger > :nth-child(8) { --i: 7; }
+   .stagger > :nth-child(9) { --i: 8; }
+   .stagger > :nth-child(10) { --i: 9; }
+   .stagger > :nth-child(11) { --i: 10; }
+   .stagger > :nth-child(n + 12) { --i: 11; }
+
+   /* Standard interactive transition set — colour, border, shadow, small transforms. */
+   .transition-ui {
+      transition:
+         color var(--dur-fast) var(--ease-standard),
+         background-color var(--dur-fast) var(--ease-standard),
+         border-color var(--dur-fast) var(--ease-standard),
+         box-shadow var(--dur-fast) var(--ease-standard),
+         opacity var(--dur-fast) var(--ease-standard),
+         transform var(--dur-fast) var(--ease-standard),
+         translate var(--dur-fast) var(--ease-standard),
+         scale var(--dur-fast) var(--ease-standard);
+   }
+
+   /* Focus + context for graphs: put .is-dimmed on everything not related to the hovered mark. */
+   .viz-mark {
+      transition:
+         opacity var(--dur-base) var(--ease-standard),
+         stroke-width var(--dur-base) var(--ease-standard),
+         fill var(--dur-base) var(--ease-standard),
+         stroke var(--dur-base) var(--ease-standard);
+   }
+
+   .viz-mark.is-dimmed {
+      opacity: 0.12;
+   }
+
+   .viz-mark.is-focused {
+      opacity: 1;
+   }
+
+   /* Route change: the incoming page fades up. */
+   .route-view {
+      animation: rise-in var(--dur-slow) var(--ease-enter) backwards;
+   }
+}
+
+/* Shared-element / page transitions via the View Transitions API (see lib/motion.ts). */
+::view-transition-old(root),
+::view-transition-new(root) {
+   animation-duration: var(--dur-base);
+   animation-timing-function: var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+   /* No travel, no scaling, no drawing — opacity only. */
+   @keyframes rise-in {
+      from {
+         opacity: 0;
+      }
+   }
+
+   @keyframes sink-in {
+      from {
+         opacity: 0;
+      }
+   }
+
+   @keyframes scale-in {
+      from {
+         opacity: 0;
+      }
+   }
+
+   @keyframes reveal {
+      from {
+         opacity: 0;
+      }
+   }
+
+   @keyframes slide-in-right {
+      from {
+         opacity: 0;
+      }
+   }
+
+   @keyframes slide-in-left {
+      from {
+         opacity: 0;
+      }
+   }
+
+   @keyframes slide-in-bottom {
+      from {
+         opacity: 0;
+      }
+   }
+
+   @keyframes grow-x {
+      from {
+         opacity: 0;
+      }
+   }
+
+   @keyframes draw-stroke {
+      from {
+         opacity: 0;
+      }
+   }
+
+   @keyframes shimmer {
+      from,
+      to {
+         background-position: 50% 0;
+      }
+   }
+
+   .anim-draw {
+      stroke-dasharray: none;
+   }
+
+   html {
+      scroll-behavior: auto !important;
+   }
+
+   ::view-transition-group(*),
+   ::view-transition-old(*),
+   ::view-transition-new(*) {
+      animation-duration: 100ms !important;
+   }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+   html {
+      scroll-behavior: smooth;
+   }
+}

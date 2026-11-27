@@ -13,12 +13,15 @@ export function StatCard({ label, value, detail, icon }: StatCardProps): React.R
 
    return (
       <article className="stat-card">
-         <div className="stat-icon">{icon}</div>
-         <div>
-            <p>{label}</p>
-            <strong>{formatNumber(displayValue)}</strong>
-            {detail ? <span>{detail}</span> : null}
-         </div>
+         <p className="stat-card-label">
+            <span className="stat-icon" aria-hidden="true">
+               {icon}
+            </span>
+            {label}
+         </p>
+         {/* Screen readers get the final number, not every frame of the count-up. */}
+         <strong aria-label={formatNumber(value)}>{formatNumber(displayValue)}</strong>
+         {detail ? <span className="stat-card-detail">{detail}</span> : null}
       </article>
    );
 }

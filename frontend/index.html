@@ -5,7 +5,7 @@
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <meta name="description" content="Explore the Bible’s cross-references as an interactive map — books, chapters and study notes. Esplora i riferimenti incrociati della Bibbia." />
       <meta name="application-name" content="BibliaMap" />
-      <meta name="theme-color" content="#f3f4f1" />
+      <meta name="theme-color" content="#0d1015" />
       <meta name="color-scheme" content="light dark" />
       <meta name="apple-mobile-web-app-title" content="BibliaMap" />
       <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -17,13 +17,13 @@
       <meta property="og:title" content="BibliaMap — Bible cross-reference map" />
       <meta property="og:description" content="Explore the Bible’s cross-references as an interactive map — books, chapters and study notes. Esplora i riferimenti incrociati della Bibbia." />
       <meta property="og:url" content="https://bibliamap.gabudev.cloud/" />
-      <meta property="og:image" content="https://bibliamap.gabudev.cloud/og-image.png?v=1" />
-      <meta property="og:image:secure_url" content="https://bibliamap.gabudev.cloud/og-image.png?v=1" />
+      <meta property="og:image" content="https://bibliamap.gabudev.cloud/og-image.png?v=2" />
+      <meta property="og:image:secure_url" content="https://bibliamap.gabudev.cloud/og-image.png?v=2" />
       <meta property="og:image:type" content="image/png" />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
       <meta property="og:image:alt" content="BibliaMap logo beside a circular chord diagram of cross-references between the books of the Bible" />
-      <meta property="og:image" content="https://bibliamap.gabudev.cloud/og-image-square.png?v=1" />
+      <meta property="og:image" content="https://bibliamap.gabudev.cloud/og-image-square.png?v=2" />
       <meta property="og:image:type" content="image/png" />
       <meta property="og:image:width" content="600" />
       <meta property="og:image:height" content="600" />
@@ -32,7 +32,7 @@
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content="BibliaMap — Bible cross-reference map" />
       <meta name="twitter:description" content="Explore the Bible’s cross-references as an interactive map — books, chapters and study notes. Esplora i riferimenti incrociati della Bibbia." />
-      <meta name="twitter:image" content="https://bibliamap.gabudev.cloud/og-image.png?v=1" />
+      <meta name="twitter:image" content="https://bibliamap.gabudev.cloud/og-image.png?v=2" />
       <meta name="twitter:image:alt" content="BibliaMap logo beside a circular chord diagram of cross-references between the books of the Bible" />
       <!-- /Share preview -->
       <link rel="icon" type="image/svg+xml" href="/bibliamap-icon.svg" />
@@ -48,7 +48,7 @@
                var theme = localStorage.getItem('bibliamap-theme');
                var dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
                if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
-               if (dark) document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d1015');
+               document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#0d1015' : '#f3f4f1');
             } catch (e) {}
          })();
       </script>

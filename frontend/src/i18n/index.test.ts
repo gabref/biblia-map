@@ -1,15 +1,13 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { formatNumber, formatPercent } from '../utils/format';
 import {
    LOCALE_STORAGE_KEY,
    datasetLocale,
-   en,
    formatDateIn,
    getLocale,
    interpolate,
-   itMessages,
    normalizeLocale,
    resolveLocale,
    setDatasetLocaleHint,
@@ -21,7 +19,9 @@ import {
    useT,
    type MessageKey,
 } from './index';
+import { en } from './en';
 import enSource from './en.ts?raw';
+import { it as itMessages } from './it';
 import { resetLocaleForTests } from './locale';
 
 function setNavigatorLanguages(languages: string[]): void {
@@ -216,5 +216,83 @@ describe('it.ts parity', () => {
       const parsed = [ ...enSource.matchAll(/^\s*(['"])([\w.-]+)\1\s*:/gm) ].map((match) => match[2]);
 
       expect(parsed.sort()).toEqual(Object.keys(en).sort());
+   });
+});
+
+describe('lazy dictionaries', () => {
+   // A fresh copy of the i18n modules with nothing loaded (setup.ts preloads the shared copy).
+   async function freshI18n(): Promise<typeof import('./index')> {
+      vi.resetModules();
+
+      return import('./index');
+   }
+
+   it('keeps dictionaries out of the entry: nothing is loaded until initI18n()', async () => {
+      const i18n = await freshI18n();
+
+      expect(i18n.isLocaleLoaded('en')).toBe(false);
+      expect(i18n.isLocaleLoaded('it')).toBe(false);
+      expect(i18n.t('shell.nav.home')).toBe('shell.nav.home');
+      expect(i18n.hasMessage('shell.nav.home')).toBe(false);
+
+      await expect(i18n.initI18n()).resolves.toBe('en');
+      expect(i18n.isLocaleLoaded('en')).toBe(true);
+      expect(i18n.isLocaleLoaded('it')).toBe(false);
+      expect(i18n.t('shell.nav.home')).toBe('Home');
+      expect(i18n.hasMessage('shell.nav.home')).toBe(true);
+   });
+
+   it('initI18n() loads only the locale resolved from ?lang=', async () => {
+      window.history.replaceState({}, '', '/about?lang=it');
+      const i18n = await freshI18n();
+
+      await expect(i18n.initI18n()).resolves.toBe('it');
+      expect(i18n.isLocaleLoaded('it')).toBe(true);
+      expect(i18n.isLocaleLoaded('en')).toBe(false);
+      expect(i18n.getRenderedLocale()).toBe('it');
+      expect(i18n.t('shell.nav.read')).toBe('Leggi');
+   });
+
+   it('follows the same resolution order (stored choice over navigator)', async () => {
+      setNavigatorLanguages([ 'it-IT' ]);
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en');
+      const i18n = await freshI18n();
+
+      await expect(i18n.initI18n()).resolves.toBe('en');
+      expect(i18n.isLocaleLoaded('it')).toBe(false);
+   });
+
+   it('switching loads the other dictionary, then re-renders hooks (no raw keys in between)', async () => {
+      const i18n = await freshI18n();
+
+      await i18n.initI18n();
+      const { result, unmount } = renderHook(() => ({ locale: i18n.useLocale(), t: i18n.useT() }));
+
+      expect(result.current.t('shell.nav.read')).toBe('Read');
+
+      act(() => i18n.setLocale('it'));
+      // Requested immediately, rendered once the chunk is in: the UI stays English meanwhile.
+      expect(i18n.getLocale()).toBe('it');
+      expect(result.current.locale).toBe('en');
+      expect(result.current.t('shell.nav.read')).toBe('Read');
+
+      await waitFor(() => expect(result.current.locale).toBe('it'));
+      expect(i18n.isLocaleLoaded('it')).toBe(true);
+      expect(result.current.t('shell.nav.read')).toBe('Leggi');
+
+      // Back to English: already loaded, so the switch is synchronous.
+      act(() => i18n.setLocale('en'));
+      expect(result.current.locale).toBe('en');
+      expect(result.current.t('shell.nav.read')).toBe('Read');
+      unmount();
+   });
+
+   it('shares one request between concurrent loads', async () => {
+      const i18n = await freshI18n();
+      const first = i18n.loadLocale('it');
+
+      expect(i18n.loadLocale('it')).toBe(first);
+      await first;
+      expect(i18n.translate('it', 'shell.loading')).toBe('Caricamento…');
    });
 });

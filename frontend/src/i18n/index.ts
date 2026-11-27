@@ -11,6 +11,10 @@
  * Outside React (loaders, utils) call `t()` / `getLocale()` directly; they read the current
  * locale but do not subscribe.
  *
+ * Dictionaries are lazy chunks: only the active locale is fetched. `main.tsx` awaits
+ * `initI18n()` before rendering; a language switch loads the other chunk, then hooks re-render
+ * (see `dictionaries.ts`).
+ *
  * Message syntax:
  *  - `{name}` — replaced by `vars.name` (numbers are NOT auto-formatted: years would get a
  *    thousands separator; pass `formatNumber(n)` when you want grouping).
@@ -21,14 +25,14 @@
  */
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 
-import { en, type MessageKey, type Messages } from './en';
+import { dictionaryFor, getRenderedLocale, subscribeRenderedLocale } from './dictionaries';
+import type { MessageKey } from './en';
 import { formatDateIn, formatDateTimeIn, formatNumberIn, formatPercentIn, pluralRules } from './format';
-import { it } from './it';
-import { DEFAULT_LOCALE, getLocale, subscribeLocale, type Locale } from './locale';
+import { DEFAULT_LOCALE, LOCALES, type Locale } from './locale';
 
-export { en } from './en';
+// Type-only: the dictionaries themselves are lazy chunks (see dictionaries.ts).
 export type { MessageKey, Messages } from './en';
-export { it as itMessages } from './it';
+export { getRenderedLocale, initI18n, isLocaleLoaded, loadLocale } from './dictionaries';
 export {
    DEFAULT_LOCALE,
    LOCALES,
@@ -48,8 +52,6 @@ export { bookName } from './bookNames';
 
 export type TranslateVars = Record<string, string | number>;
 export type TranslateFn = (key: MessageKey, vars?: TranslateVars) => string;
-
-const dictionaries: Record<Locale, Partial<Messages>> = { en, it };
 
 /** Index of the `}` matching the `{` at `open`, or -1. */
 function matchingBrace(source: string, open: number): number {
@@ -103,7 +105,7 @@ function pluralBranch(body: string, value: number, locale: Locale): string | nul
  * Fills `{name}` placeholders and `{name, plural, ...}` blocks. Unknown placeholders and
  * malformed blocks are left as-is (visible in the UI rather than silently dropped).
  */
-export function interpolate(template: string, vars?: TranslateVars, locale: Locale = getLocale()): string {
+export function interpolate(template: string, vars?: TranslateVars, locale: Locale = getRenderedLocale()): string {
    if (!vars || !template.includes('{')) {
       return template;
    }
@@ -150,30 +152,43 @@ export function interpolate(template: string, vars?: TranslateVars, locale: Loca
    return output;
 }
 
-/** Translate in an explicit locale. */
+/**
+ * Translate in an explicit locale. Falls back to English, then to the key, when the locale's
+ * dictionary lacks the key or has not been loaded yet (`loadLocale` / `initI18n`).
+ */
 export function translate(locale: Locale, key: MessageKey, vars?: TranslateVars): string {
-   const template = dictionaries[locale][key] ?? en[key] ?? key;
+   const template = dictionaryFor(locale)?.[key] ?? dictionaryFor(DEFAULT_LOCALE)?.[key] ?? key;
 
    return interpolate(template, vars, locale);
 }
 
-/** Translate in the current locale. Missing keys return the key itself. */
+/** Translate in the rendered locale. Missing keys return the key itself. */
 export function t(key: MessageKey, vars?: TranslateVars): string {
-   return translate(getLocale(), key, vars);
+   return translate(getRenderedLocale(), key, vars);
 }
 
-/** `true` when `key` exists in English (for keys built at runtime, e.g. `shell.edgeKind.${kind}`). */
+/**
+ * `true` when `key` exists in a loaded dictionary (for keys built at runtime, e.g.
+ * `shell.edgeKind.${kind}`). `it.ts` has the same keys as `en.ts` (`npm run i18n:check`).
+ */
 export function hasMessage(key: string): key is MessageKey {
-   return key in en;
+   return LOCALES.some((locale) => {
+      const dictionary = dictionaryFor(locale);
+
+      return dictionary !== undefined && key in dictionary;
+   });
 }
 
 function getServerLocale(): Locale {
    return DEFAULT_LOCALE;
 }
 
-/** Current UI locale; re-renders on change. */
+/**
+ * Current UI locale; re-renders on change. This is the *rendered* locale: after a switch it
+ * changes once the new dictionary has loaded, so components never show raw keys.
+ */
 export function useLocale(): Locale {
-   return useSyncExternalStore(subscribeLocale, getLocale, getServerLocale);
+   return useSyncExternalStore(subscribeRenderedLocale, getRenderedLocale, getServerLocale);
 }
 
 /** `t` bound to the current locale; a new function identity per locale (safe in deps). */

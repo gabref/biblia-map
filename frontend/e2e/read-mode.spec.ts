@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { gotoReady, isMobileProject } from './support';
 
 function verseButton(page: Page, verse: number) {
-   return page.getByRole('button', { name: new RegExp(`^Verse ${verse}, \\d+ connections?$`) });
+   return page.getByRole('button', { name: new RegExp(`^Verse ${verse}, \\d+ connections?`) });
 }
 
 /** The verse panel: a side column on wide screens, a bottom sheet on small ones. */

@@ -48,9 +48,10 @@ describe('buildVerseIndex', () => {
 
 describe('routeIdFromPath', () => {
    it('maps paths to lazily loaded routes', () => {
-      expect(routeIdFromPath('/')).toBe('overview');
-      expect(routeIdFromPath('/verse/43/3/16')).toBe('verse');
-      expect(routeIdFromPath('/chord')).toBe('chord');
-      expect(routeIdFromPath('/unknown')).toBe('overview');
+      expect(routeIdFromPath('/')).toBe('home');
+      expect(routeIdFromPath('/verse/john/3/16')).toBe('verse');
+      expect(routeIdFromPath('/chord')).toBe('insights');
+      expect(routeIdFromPath('/styleguide')).toBe('styleguide');
+      expect(routeIdFromPath('/unknown')).toBe('notFound');
    });
 });

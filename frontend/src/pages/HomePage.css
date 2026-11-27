@@ -1,0 +1,360 @@
+/* Home (owner: E-A). Tokens only; primitives from components/ui. */
+
+/* Pin Tailwind's layer order: this file can be evaluated before styles/index.css (see read.css). */
+@layer theme, base, components, utilities;
+
+@layer components {
+   .home {
+      gap: var(--space-10);
+   }
+
+   /* ---------- Hero ---------- */
+   .home-hero {
+      display: grid;
+      gap: var(--space-4);
+      max-width: 46rem;
+      padding-top: var(--space-6);
+   }
+
+   .home-hero .eyebrow {
+      margin: 0;
+   }
+
+   .home-hero__title {
+      margin: 0;
+      font-family: var(--font-serif);
+      font-size: clamp(2rem, 1.4rem + 2.4vw, var(--text-4xl));
+      font-weight: 500;
+      line-height: var(--leading-tight);
+      letter-spacing: var(--tracking-tight);
+      text-wrap: balance;
+   }
+
+   .home-hero__title:focus {
+      outline: none;
+   }
+
+   .home-hero__lead {
+      max-width: 60ch;
+      margin: 0;
+      color: var(--ink-2);
+      font-size: var(--text-lg);
+      line-height: var(--leading-normal);
+      text-wrap: pretty;
+   }
+
+   .home-hero__search {
+      margin-top: var(--space-2);
+   }
+
+   .home-hero__try {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
+      margin: 0;
+      color: var(--ink-3);
+      font-size: var(--text-sm);
+   }
+
+   .home-hero__query {
+      display: inline-flex;
+      align-items: center;
+      min-height: 1.75rem;
+      padding: 0 var(--space-2);
+      color: var(--accent);
+      background: var(--accent-soft);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      text-decoration: none;
+      transition: background-color var(--dur-fast) var(--ease-standard);
+   }
+
+   .home-hero__query:hover {
+      color: var(--accent-hover);
+      background: var(--surface-hover);
+   }
+
+   /* ---------- Sections ---------- */
+   .home-section {
+      display: grid;
+      align-content: start;
+      gap: var(--space-4);
+      min-width: 0;
+   }
+
+   .home-section-title {
+      margin: 0;
+      font-family: var(--font-serif);
+      font-size: var(--text-xl);
+      font-weight: 550;
+      letter-spacing: -0.01em;
+   }
+
+   .home-section-lead {
+      max-width: 60ch;
+      margin: 0;
+      color: var(--ink-2);
+      font-size: var(--text-sm);
+      line-height: var(--leading-normal);
+   }
+
+   /* ---------- First-visit steps ---------- */
+   .home-steps {
+      display: grid;
+      gap: var(--space-4);
+   }
+
+   .home-steps__head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+   }
+
+   .home-steps__list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-5);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: step;
+   }
+
+   .home-steps__list li {
+      display: flex;
+      gap: var(--space-3);
+      color: var(--ink-2);
+      font-size: var(--text-sm);
+      line-height: var(--leading-normal);
+   }
+
+   .home-steps__list svg {
+      flex-shrink: 0;
+      margin-top: 2px;
+      color: var(--accent);
+   }
+
+   .home-steps__list strong {
+      display: block;
+      color: var(--ink);
+      font-weight: 650;
+   }
+
+   /* ---------- Continue ---------- */
+   .home-continue {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+   }
+
+   .home-continue__link {
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--control-h);
+      padding: 0 var(--space-4);
+      color: var(--ink);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--rubric);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-sm);
+      font-weight: 600;
+      text-decoration: none;
+      transition: background-color var(--dur-fast) var(--ease-standard);
+   }
+
+   .home-continue__link:hover {
+      color: var(--ink);
+      background: var(--surface-hover);
+   }
+
+   /* ---------- Examples ---------- */
+   .home-examples {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-3);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+   }
+
+   .home-example {
+      display: block;
+      height: 100%;
+      color: inherit;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      text-decoration: none;
+      transition: border-color var(--dur-fast) var(--ease-standard);
+   }
+
+   .home-example:hover {
+      color: inherit;
+      border-color: var(--line-strong);
+   }
+
+   .home-example > div,
+   .home-example .ui-verse {
+      height: 100%;
+   }
+
+   /* Equal-height cards: keep the rows at content height so the 2-line clamp never shows a third line. */
+   .home-example .ui-verse,
+   .home-example .ui-verse__main {
+      align-content: start;
+      align-items: start;
+   }
+
+   /* ---------- Editions + insights ---------- */
+   .home-columns {
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+      align-items: start;
+      gap: var(--space-6);
+   }
+
+   .home-editions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-3);
+   }
+
+   .home-edition {
+      position: relative;
+      display: flex;
+      gap: var(--space-3);
+      padding: var(--space-4);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition:
+         border-color var(--dur-fast) var(--ease-standard),
+         background-color var(--dur-fast) var(--ease-standard);
+   }
+
+   .home-edition:hover {
+      border-color: var(--line-strong);
+   }
+
+   .home-edition.is-selected {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+   }
+
+   .home-edition input {
+      flex-shrink: 0;
+      width: 1rem;
+      height: 1rem;
+      margin: 2px 0 0;
+      accent-color: var(--accent);
+   }
+
+   .home-edition__body {
+      display: grid;
+      gap: var(--space-1);
+      min-width: 0;
+   }
+
+   .home-edition__name {
+      color: var(--ink);
+      font-size: var(--text-sm);
+      font-weight: 650;
+   }
+
+   .home-edition__description {
+      color: var(--ink-2);
+      font-size: var(--text-xs);
+      line-height: var(--leading-normal);
+   }
+
+   .home-insights {
+      display: grid;
+      gap: var(--space-3);
+      justify-items: start;
+   }
+
+   .home-insights__icon {
+      color: var(--gilt-ink);
+   }
+
+   .home-insights__cta {
+      margin-top: var(--space-2);
+   }
+
+   /* ---------- Not found ---------- */
+   .not-found {
+      display: grid;
+      gap: var(--space-5);
+      max-width: 40rem;
+      padding-top: var(--space-8);
+   }
+
+   .not-found h1 {
+      margin: 0;
+      font-family: var(--font-serif);
+      font-size: var(--text-3xl);
+      font-weight: 500;
+   }
+
+   .not-found h1:focus {
+      outline: none;
+   }
+
+   .not-found p {
+      margin: 0;
+      color: var(--ink-2);
+   }
+
+   .not-found__path {
+      font-family: var(--font-mono);
+      font-size: 0.92em;
+      overflow-wrap: anywhere;
+   }
+
+   @media (max-width: 1100px) {
+      .home-examples {
+         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .home-columns {
+         grid-template-columns: minmax(0, 1fr);
+      }
+   }
+
+   @media (max-width: 760px) {
+      .home {
+         gap: var(--space-8);
+      }
+
+      .home-hero {
+         padding-top: 0;
+      }
+
+      .home-hero__lead {
+         font-size: var(--text-md);
+      }
+
+      .home-steps__list,
+      .home-examples,
+      .home-editions {
+         grid-template-columns: minmax(0, 1fr);
+      }
+
+      .home-steps__list {
+         gap: var(--space-4);
+      }
+
+      .home-continue__link,
+      .home-hero__query {
+         min-height: var(--tap-min);
+      }
+   }
+}

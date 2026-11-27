@@ -78,16 +78,77 @@ export function edgeKindCode(edgeKind: EdgeKindFilter): number | null {
    }
 }
 
+const datasetIdPattern = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+
+/**
+ * Parsed generated files, keyed by relative path. Pages reload the same multi-megabyte files
+ * (verse-index.json is ~4 MB, chapters.json ~3 MB) every time they mount, and the verse explorer
+ * re-requests the same per-book adjacency files for every verse it shows. Sharing the in-flight
+ * promise also dedupes concurrent requests for the same file. Least recently used entries are
+ * evicted once the cache is full; failed loads are never cached, so a retry refetches.
+ */
+const maxCachedFiles = 64;
+const generatedCache = new Map<string, Promise<unknown>>();
+
+export function clearGeneratedDataCache(): void {
+   generatedCache.clear();
+}
+
+export function isValidDatasetId(datasetId: string): boolean {
+   return datasetIdPattern.test(datasetId);
+}
+
 async function loadDatasetJson<T>(datasetId: string, relativePath: string): Promise<T> {
+   if (!isValidDatasetId(datasetId)) {
+      throw new Error(`Invalid dataset id: ${JSON.stringify(datasetId)}`);
+   }
+
    return loadGeneratedJson<T>(`${datasetId}/${relativePath}`);
 }
 
-async function loadGeneratedJson<T>(relativePath: string): Promise<T> {
+function loadGeneratedJson<T>(relativePath: string): Promise<T> {
+   const cached = generatedCache.get(relativePath);
+
+   if (cached) {
+      // Refresh recency: Map iteration order is insertion order.
+      generatedCache.delete(relativePath);
+      generatedCache.set(relativePath, cached);
+      return cached as Promise<T>;
+   }
+
+   const pending = fetchGeneratedJson<T>(relativePath);
+   generatedCache.set(relativePath, pending);
+   pending.catch(() => {
+      if (generatedCache.get(relativePath) === pending) {
+         generatedCache.delete(relativePath);
+      }
+   });
+
+   while (generatedCache.size > maxCachedFiles) {
+      const oldestKey = generatedCache.keys().next().value;
+
+      if (oldestKey === undefined) {
+         break;
+      }
+
+      generatedCache.delete(oldestKey);
+   }
+
+   return pending;
+}
+
+async function fetchGeneratedJson<T>(relativePath: string): Promise<T> {
    const response = await fetch(`${generatedBasePath}/${relativePath}`);
 
    if (!response.ok) {
-      throw new Error(`Generated data file failed to load: ${relativePath}`);
+      throw new Error(`Generated data file failed to load: ${relativePath} (HTTP ${response.status})`);
    }
 
-   return response.json() as Promise<T>;
+   try {
+      return (await response.json()) as T;
+   } catch {
+      // A missing file behind an SPA fallback comes back as index.html with status 200.
+      const contentType = response.headers.get('content-type') ?? 'unknown content type';
+      throw new Error(`Generated data file is not valid JSON: ${relativePath} (${contentType})`);
+   }
 }

@@ -22,6 +22,7 @@ import {
    topConnections,
    verseConnections,
    verseCount,
+   verseDegreeTotal,
    type ChapterData,
 } from './chapterData';
 
@@ -109,9 +110,11 @@ describe('verse connections', () => {
 
    it('ranks top connections by precomputed degree when available', () => {
       const connections = verseConnections(john316, index, 'combined', 'outgoing');
-      const degree = { in: Array(40).fill(0), out: Array(40).fill(0) };
-      degree.in[30] = 9;
+      const degree = { in: Array(40).fill(0), out: Array(40).fill(0), inStudy: Array(40).fill(0), outStudy: Array(40).fill(0) };
+      degree.in[30] = 5;
+      degree.inStudy[30] = 4;
       degree.in[10] = 4;
+      degree.outStudy[20] = 3;
 
       expect(topConnections(connections, 2).map((item) => item.verseId)).toEqual([ 20, 30 ]);
       expect(topConnections(connections, 2, degree).map((item) => item.verseId)).toEqual([ 30, 10 ]);
@@ -139,53 +142,75 @@ describe('chapter summary', () => {
       ]);
    });
 
-   it('uses the precomputed matrix only for outgoing with a matching kind', () => {
-      const data = {
-         chapterNumber: 2,
-         verses,
-         verseIndex: index,
-         chapterMatrix: { combined: [ [ 1 ], [ 0, 5, 0, 2 ] ] },
-      } as unknown as ChapterData;
+   it('always aggregates from the adjacency', () => {
+      const data = { chapterNumber: 2, verses, verseIndex: index } as unknown as ChapterData;
 
-      expect(chapterSummary(data, 'combined', 'outgoing')).toMatchObject({
-         source: 'matrix',
-         total: 7,
-         books: [ { bookNumber: 2, count: 5 }, { bookNumber: 4, count: 2 } ],
-      });
-      expect(chapterSummary(data, 'crossrefs', 'outgoing').source).toBe('adjacency');
-      expect(chapterSummary(data, 'combined', 'all').source).toBe('adjacency');
+      expect(chapterSummary(data, 'combined', 'outgoing')).toEqual(summarizeChapter(verses, index, 'combined', 'outgoing'));
+      expect(chapterSummary(data, 'crossrefs', 'all').source).toBe('adjacency');
    });
 });
 
 describe('E-G optional file normalizers', () => {
-   it('detects features from candidate names', () => {
+   it('detects the extractor feature names', () => {
       expect(detectFeatures({ datasetId: 'x' })).toEqual({ verseDegree: false, chapterMatrix: false, studyNotes: false });
-      expect(detectFeatures({ datasetId: 'x', features: [ 'verse-degree', 'study-notes', 'chapter-matrices' ] }))
+      expect(detectFeatures({ datasetId: 'x', features: [ 'verse-degree', 'study-note-text', 'chapter-matrices' ] }))
          .toEqual({ verseDegree: true, chapterMatrix: true, studyNotes: true });
+      expect(detectFeatures({ datasetId: 'x', features: [ 'study-notes', 'chapter-matrix' ] }))
+         .toEqual({ verseDegree: false, chapterMatrix: false, studyNotes: false });
    });
 
    it('normalizes verse degree', () => {
-      expect(normalizeVerseDegree({ in: [ 1 ], out: [ 2 ], inStudy: [ 0 ] })).toEqual({ in: [ 1 ], out: [ 2 ], inStudy: [ 0 ] });
-      expect(normalizeVerseDegree({ incoming: [ 1 ], outgoing: [ 2 ] })).toEqual({ in: [ 1 ], out: [ 2 ] });
+      const file = { schemaVersion: 1, index: 'jwpubVerseId', length: 1, in: [ 1 ], out: [ 2 ], inStudy: [ 3 ], outStudy: [ 4 ] };
+
+      expect(normalizeVerseDegree(file)).toEqual({ in: [ 1 ], out: [ 2 ], inStudy: [ 3 ], outStudy: [ 4 ] });
+      expect(normalizeVerseDegree({ in: [ 1 ], out: [ 2 ] })).toBeNull();
       expect(normalizeVerseDegree({ in: 'x' })).toBeNull();
       expect(normalizeVerseDegree(null)).toBeNull();
    });
 
-   it('reads chapter matrix variants', () => {
-      expect(chapterMatrixCounts([ [ 0, 3 ] ], 1, 'combined')).toEqual(new Map([ [ 2, 3 ] ]));
-      expect(chapterMatrixCounts([ [ 0, 3 ] ], 1, 'crossrefs')).toBeNull();
-      expect(chapterMatrixCounts({ chapters: { 3: { 40: 7 } } }, 3, 'combined')).toEqual(new Map([ [ 40, 7 ] ]));
-      expect(chapterMatrixCounts({ crossrefs: { 1: [ 1 ] } }, 1, 'crossrefs')).toEqual(new Map([ [ 1, 1 ] ]));
-      expect(chapterMatrixCounts({ crossrefs: { 1: [ 1 ] } }, 1, 'study-notes')).toBeNull();
-      expect(chapterMatrixCounts([ [ 1 ] ], 4, 'combined')).toBeNull();
+   it('totals verse degree by kind', () => {
+      const degree = { in: [ 1, 0 ], out: [ 2, 0 ], inStudy: [ 3, 0 ], outStudy: [ 4, 0 ] };
+
+      expect(verseDegreeTotal(degree, 0)).toBe(10);
+      expect(verseDegreeTotal(degree, 0, 'crossrefs')).toBe(3);
+      expect(verseDegreeTotal(degree, 0, 'study-notes')).toBe(7);
+      expect(verseDegreeTotal(degree, 1)).toBe(0);
+      expect(verseDegreeTotal(degree, 2)).toBeNull();
+      expect(verseDegreeTotal(degree, -1)).toBeNull();
+   });
+
+   it('reads chapter matrix rows by kind and direction', () => {
+      const matrix = {
+         bookNumber: 43,
+         chapters: 2,
+         outgoing: [ [ [ 1, 2, 0, 2 ], [ 45, 1, 3, 4 ] ], [] ],
+         incoming: [ [ [ 62, 0, 1, 1 ] ], [] ],
+      };
+
+      expect(chapterMatrixCounts(matrix, 1, 'combined')).toEqual(new Map([ [ 1, 2 ], [ 45, 4 ] ]));
+      expect(chapterMatrixCounts(matrix, 1, 'crossrefs')).toEqual(new Map([ [ 1, 2 ], [ 45, 1 ] ]));
+      expect(chapterMatrixCounts(matrix, 1, 'study-notes')).toEqual(new Map([ [ 45, 3 ] ]));
+      expect(chapterMatrixCounts(matrix, 1, 'study-notes', 'incoming')).toEqual(new Map([ [ 62, 1 ] ]));
+      expect(chapterMatrixCounts(matrix, 2, 'combined')).toEqual(new Map());
+      expect(chapterMatrixCounts(matrix, 3, 'combined')).toBeNull();
+      expect(chapterMatrixCounts({ outgoing: [ [ [ 1, 2 ] ] ] }, 1, 'combined')).toBeNull();
+      expect(chapterMatrixCounts([ [ 0, 3 ] ], 1, 'combined')).toBeNull();
       expect(chapterMatrixCounts('nope', 1, 'combined')).toBeNull();
    });
 
-   it('reads study note variants', () => {
-      expect(normalizeStudyNotes({ 5: 'Note', 6: [ { text: 'A' }, { text: ' ' } ] })).toEqual(new Map([ [ 5, [ 'Note' ] ], [ 6, [ 'A' ] ] ]));
-      expect(normalizeStudyNotes({ notes: { 7: { text: 'B' } } })).toEqual(new Map([ [ 7, [ 'B' ] ] ]));
-      expect(normalizeStudyNotes([ { verseId: 8, text: 'C' }, { verseId: 8, text: 'D' }, { text: 'no id' } ]))
-         .toEqual(new Map([ [ 8, [ 'C', 'D' ] ] ]));
+   it('reads study note paragraphs with their lemma', () => {
+      const file = {
+         5: [
+            { commentaryId: 1, heading: '3:16', paragraphs: [ { pid: 7, lemma: 'world', text: 'Mankind.', refs: [ [ 0, 1, 2, 2 ] ] }, { text: 'More.' } ] },
+            { commentaryId: 2, heading: '3:16', paragraphs: [ { lemma: ' ', text: 'Plain.' }, { text: '  ' } ] },
+         ],
+         6: [ { commentaryId: 3, heading: '3:17', paragraphs: [] } ],
+         x: [ { paragraphs: [ { text: 'bad id' } ] } ],
+      };
+
+      expect(normalizeStudyNotes(file)).toEqual(new Map([ [ 5, [ 'world: Mankind.', 'More.', 'Plain.' ] ] ]));
+      expect(normalizeStudyNotes({ 7: 'Note' })).toEqual(new Map());
+      expect(normalizeStudyNotes([ { verseId: 8, text: 'C' } ])).toBeNull();
       expect(normalizeStudyNotes(42)).toBeNull();
    });
 });

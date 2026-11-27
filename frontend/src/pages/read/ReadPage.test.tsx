@@ -39,7 +39,6 @@ const data: ChapterData = {
    verseIndex: { 1: v16, 2: v17, 20: rom58 },
    features: { verseDegree: false, chapterMatrix: false, studyNotes: true },
    verseDegree: null,
-   chapterMatrix: null,
    studyNotes: new Map([ [ 1, [ 'A note on love.' ] ] ]),
 };
 

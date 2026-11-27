@@ -12,11 +12,8 @@ import { gotoReady, isMobileProject, ROUTES, trackIssues } from './support';
 /**
  * Known open violations, owned by another stream. Each entry is excluded from axe only for
  * its own selector; remove it once fixed so the sweep guards it again.
- *
- * TODO(E-D): Insights overview "Hebrew → Hebrew" flow cell caption is 4.34:1 in dark theme
- * (`--ink-3` on the tinted cell). Fix: `.ins-flow-matrix__cell .t-caption { color: var(--ink-2) }`.
  */
-const KNOWN_ISSUES: readonly string[] = [ '.ins-flow-matrix__cell .t-caption' ];
+const KNOWN_ISSUES: readonly string[] = [];
 
 /**
  * `label-content-name-mismatch` (WCAG 2.5.3) is an *experimental* axe rule. It still flags

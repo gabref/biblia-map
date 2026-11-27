@@ -540,6 +540,11 @@
    font-size: var(--text-xl);
 }
 
+/* --ink-3 is 4.34:1 on the tinted cell in dark; --ink-2 passes AA in both themes. */
+.ins-flow-matrix__cell .t-caption {
+   color: var(--ink-2);
+}
+
 /* ---------- Chord ---------- */
 
 .ins-chord-layout {

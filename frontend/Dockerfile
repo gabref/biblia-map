@@ -38,5 +38,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+# Traefik only routes to healthy containers: probe quickly at startup so a deploy is not
+# followed by ~30-60 s of Traefik 404s while the first 30 s interval elapses.
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=10s --start-interval=1s \
   CMD wget -qO- http://127.0.0.1/ > /dev/null || exit 1

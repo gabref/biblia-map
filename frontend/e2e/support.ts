@@ -1,6 +1,6 @@
 import { expect, type Page, type TestInfo } from '@playwright/test';
 
-/** One URL per route (and per interim Insights tab). Used by the a11y, overflow and console sweeps. */
+/** One URL per route (and per Insights view). Used by the a11y, overflow and console sweeps. */
 export const ROUTES: ReadonlyArray<{ name: string; path: string }> = [
    { name: 'home', path: '/' },
    { name: 'verse', path: '/verse/john/3/16' },
@@ -9,8 +9,11 @@ export const ROUTES: ReadonlyArray<{ name: string; path: string }> = [
    { name: 'read (it)', path: '/read/john/3?ds=nwtsty-i&lang=it' },
    { name: 'insights', path: '/insights' },
    { name: 'insights chord', path: '/insights?tab=chord' },
+   { name: 'insights hubs', path: '/insights?tab=hubs' },
+   { name: 'insights heatmap', path: '/insights?tab=heatmap' },
+   { name: 'insights flows', path: '/insights?tab=flows' },
    { name: 'insights clusters', path: '/insights?tab=clusters' },
-   { name: 'book', path: '/book/john' },
+   { name: 'book', path: '/book/psalms' },
    { name: 'study', path: '/study' },
    { name: 'study collection', path: '/study/saved' },
    { name: 'study print', path: '/study/saved/print' },

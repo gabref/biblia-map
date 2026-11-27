@@ -35,7 +35,8 @@ export default defineConfig({
    fullyParallel: true,
    forbidOnly: ci,
    retries: ci ? 1 : 0,
-   workers: ci ? 2 : undefined,
+   // GitHub-hosted Linux runners have 4 vCPUs.
+   workers: ci ? 4 : undefined,
    timeout: 30_000,
    expect: { timeout: 7_500 },
    reporter: ci ? [ [ 'list' ], [ 'html', { open: 'never', outputFolder: 'playwright-report' } ] ] : [ [ 'list' ] ],

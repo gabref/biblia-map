@@ -7,7 +7,7 @@ import { gzipSync } from 'node:zlib';
 
 const budgetsKb = {
    initialJs: 90, // JS loaded by index.html before any route chunk (entry + react vendor)
-   initialCss: 10,
+   initialCss: 20, // design system (tokens, ui, shell, pages) as of Sprint 1
    routeChunk: 25, // any single lazily loaded chunk (page or vendor such as d3)
    totalJs: 160,
 };

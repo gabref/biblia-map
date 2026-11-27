@@ -9,7 +9,7 @@ const budgetsKb = {
    initialJs: 90, // JS loaded by index.html before any route chunk (entry + react vendor)
    initialCss: 20, // design system (tokens, ui, shell, pages) as of Sprint 1
    routeChunk: 25, // any single lazily loaded chunk (page or vendor such as d3)
-   totalJs: 160,
+   totalJs: 240, // sum of every chunk; raised in Sprint 2 as Read, Study, search and Insights became reachable. Users only load what a route needs.
 };
 
 const distDir = path.resolve(process.argv[2] ?? 'dist');

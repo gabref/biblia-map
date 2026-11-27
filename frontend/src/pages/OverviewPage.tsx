@@ -1,5 +1,5 @@
 import { ArrowDownToLine, ArrowUpFromLine, BookMarked, Blocks, GitBranch, Landmark, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ErrorState } from '../components/ErrorState';
 import { LoadingShimmer } from '../components/LoadingShimmer';
@@ -68,8 +68,12 @@ export function OverviewPage({ datasetId }: OverviewPageProps): React.ReactEleme
       setDetailsLoading(false);
    }, [ datasetId ]);
 
+   // Only depend on whether details are needed: depending on `detailsLoading` made the effect
+   // cancel its own request as soon as it flipped the flag, leaving "View all" stuck loading.
+   const needsDetails = activeDetail !== null && details === null;
+
    useEffect(() => {
-      if (!activeDetail || details || detailsLoading) {
+      if (!needsDetails) {
          return;
       }
 
@@ -77,27 +81,25 @@ export function OverviewPage({ datasetId }: OverviewPageProps): React.ReactEleme
       setDetailsLoading(true);
       setDetailsError(null);
 
-      void loadOverviewDetails(datasetId)
-         .then((nextDetails) => {
+      void loadOverviewDetails(datasetId).then(
+         (nextDetails) => {
             if (!cancelled) {
                setDetails(nextDetails);
-            }
-         })
-         .catch((nextError: unknown) => {
-            if (!cancelled) {
-               setDetailsError(nextError instanceof Error ? nextError : new Error(String(nextError)));
-            }
-         })
-         .finally(() => {
-            if (!cancelled) {
                setDetailsLoading(false);
             }
-         });
+         },
+         (nextError: unknown) => {
+            if (!cancelled) {
+               setDetailsError(nextError instanceof Error ? nextError : new Error(String(nextError)));
+               setDetailsLoading(false);
+            }
+         },
+      );
 
       return () => {
          cancelled = true;
       };
-   }, [ activeDetail, datasetId, details, detailsLoading ]);
+   }, [ needsDetails, datasetId ]);
 
    if (error) {
       return <ErrorState title="Generated data is unavailable" error={error} />;
@@ -339,8 +341,39 @@ interface DetailModalProps {
    onClose: () => void;
 }
 
+const detailRowBatch = 200;
+
 function DetailModal({ title, description, rows, loading, error, onClose }: DetailModalProps): React.ReactElement {
-   const maximum = Math.max(...rows.map((row) => row.value), 1);
+   // Spreading tens of thousands of values into Math.max can overflow the call stack.
+   const maximum = useMemo(() => rows.reduce((max, row) => Math.max(max, row.value), 1), [ rows ]);
+   // Verse lists hold ~30k rows; mount them in batches as the user scrolls instead of all at once.
+   const [visibleCount, setVisibleCount] = useState(detailRowBatch);
+   const sentinelRef = useRef<HTMLLIElement | null>(null);
+   const visibleRows = rows.length > visibleCount ? rows.slice(0, visibleCount) : rows;
+
+   useEffect(() => {
+      setVisibleCount(detailRowBatch);
+   }, [ rows ]);
+
+   useEffect(() => {
+      const sentinel = sentinelRef.current;
+
+      if (!sentinel || typeof IntersectionObserver === 'undefined') {
+         return;
+      }
+
+      const observer = new IntersectionObserver(
+         (entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) {
+               setVisibleCount((count) => count + detailRowBatch * 2);
+            }
+         },
+         { rootMargin: '600px 0px' },
+      );
+      observer.observe(sentinel);
+
+      return () => observer.disconnect();
+   }, [ visibleRows.length, rows.length ]);
 
    return (
       <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -364,7 +397,7 @@ function DetailModal({ title, description, rows, loading, error, onClose }: Deta
             {loading ? <LoadingShimmer rows={5} /> : null}
             {!loading && !error ? (
                <ol className="detail-row-list">
-                  {rows.map((row) => (
+                  {visibleRows.map((row) => (
                      <li key={`${row.label}-${row.meta ?? ''}`}>
                         <div>
                            <span>{row.label}</span>
@@ -374,6 +407,9 @@ function DetailModal({ title, description, rows, loading, error, onClose }: Deta
                         <meter min={0} max={maximum} value={row.value} />
                      </li>
                   ))}
+                  {visibleRows.length < rows.length ? (
+                     <li ref={sentinelRef} className="detail-row-sentinel" aria-hidden="true" />
+                  ) : null}
                </ol>
             ) : null}
          </section>

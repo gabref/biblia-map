@@ -31,8 +31,42 @@ export async function loadChapters(datasetId: string): Promise<Chapter[]> {
    return loadDatasetJson<Chapter[]>(datasetId, 'chapters.json');
 }
 
+/**
+ * The verse index is derived from `chapters.json` instead of fetching `verse-index.json`:
+ * every VerseRef is fully contained in the chapter verse lists (verified for all datasets),
+ * so pages that need both files (Verse, Overview details, Blocks) download ~4 MB less JSON.
+ */
 export async function loadVerseIndex(datasetId: string): Promise<VerseIndex> {
-   return loadDatasetJson<VerseIndex>(datasetId, 'verse-index.json');
+   return buildVerseIndex(await loadChapters(datasetId));
+}
+
+const verseIndexByChapters = new WeakMap<Chapter[], VerseIndex>();
+
+export function buildVerseIndex(chapters: Chapter[]): VerseIndex {
+   const cached = verseIndexByChapters.get(chapters);
+
+   if (cached) {
+      return cached;
+   }
+
+   const verseIndex: VerseIndex = {};
+
+   for (const chapter of chapters) {
+      for (const verse of chapter.verses) {
+         verseIndex[String(verse.jwpubVerseId)] = {
+            jwpubVerseId: verse.jwpubVerseId,
+            canonicalVerseId: verse.canonicalVerseId,
+            bookNumber: chapter.bookNumber,
+            chapterNumber: chapter.chapterNumber,
+            verseNumber: verse.verseNumber,
+            label: verse.label,
+         };
+      }
+   }
+
+   verseIndexByChapters.set(chapters, verseIndex);
+
+   return verseIndex;
 }
 
 export async function loadStatsSummary(datasetId: string): Promise<StatsSummary> {

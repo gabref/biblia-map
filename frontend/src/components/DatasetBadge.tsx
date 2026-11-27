@@ -1,6 +1,7 @@
 import { Database } from 'lucide-react';
+import { useEffect } from 'react';
 
-import { INTL_TAGS, hasMessage, normalizeLocale, translate, useLocale, type Locale } from '../i18n';
+import { INTL_TAGS, hasMessage, normalizeLocale, setDatasetLocaleHint, translate, useLocale, type Locale } from '../i18n';
 import type { DatasetRegistryEntry } from '../types/generated';
 
 interface DatasetBadgeProps {
@@ -46,7 +47,10 @@ export function datasetDisplayName(dataset: DatasetRegistryEntry, locale: Locale
       : translate(locale, 'shell.dataset.optionNoYear', { name, language });
 }
 
-/** Edition switcher. The full publication title is exposed as the control's tooltip. */
+/**
+ * Edition switcher. The full publication title is exposed as the control's tooltip. It also
+ * tells i18n which edition is selected (see `setDatasetLocaleHint`).
+ */
 export function DatasetBadge({
    datasets,
    selectedDatasetId,
@@ -54,6 +58,14 @@ export function DatasetBadge({
 }: DatasetBadgeProps): React.ReactElement {
    const locale = useLocale();
    const selected = datasets.find((dataset) => dataset.datasetId === selectedDatasetId);
+
+   // The selected edition is a language signal for i18n (used only while the user has not
+   // picked a language): the Italian edition shows the Italian UI.
+   useEffect(() => {
+      if (selected) {
+         setDatasetLocaleHint(selected);
+      }
+   }, [ selected ]);
 
    return (
       <div className="dataset-badge">

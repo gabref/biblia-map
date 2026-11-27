@@ -4,6 +4,7 @@
 use std::{
    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
    fs::{self, File},
+   io::{BufWriter, Write},
    path::{Path, PathBuf},
    thread,
 };
@@ -1166,7 +1167,13 @@ fn write_generated_data(
       &testament_breakdown(combined_edges),
       pretty,
    )?;
-   write_adjacency_files(output, cross_reference_edges, study_note_edges, pretty)?;
+   write_adjacency_files(
+      output,
+      cross_reference_edges,
+      study_note_edges,
+      verse_map,
+      pretty,
+   )?;
    if verse_text.is_empty() {
       let verse_text_dir = output.join("verse-text");
       if verse_text_dir.exists() {
@@ -1206,12 +1213,7 @@ fn update_dataset_registry(output: &Path, manifest: &ManifestExport, pretty: boo
       return Ok(());
    };
    let registry_path = registry_dir.join("datasets.json");
-   let mut entries = if registry_path.exists() {
-      let registry_json = fs::read_to_string(&registry_path)?;
-      serde_json::from_str::<Vec<DatasetRegistryEntry>>(&registry_json).unwrap_or_default()
-   } else {
-      Vec::new()
-   };
+   let mut entries = read_dataset_registry(&registry_path)?;
    let entry = DatasetRegistryEntry {
       dataset_id: manifest.dataset_id.clone(),
       publication_symbol: manifest.publication_symbol.clone(),
@@ -1227,6 +1229,24 @@ fn update_dataset_registry(output: &Path, manifest: &ManifestExport, pretty: boo
    write_json(registry_path, &entries, pretty)
 }
 
+/// Reads the existing dataset registry. A registry that exists but cannot be parsed is an error:
+/// silently starting from an empty list would drop every other dataset from `datasets.json`.
+fn read_dataset_registry(registry_path: &Path) -> Result<Vec<DatasetRegistryEntry>> {
+   if !registry_path.exists() {
+      return Ok(Vec::new());
+   }
+
+   let registry_json = fs::read_to_string(registry_path)
+      .with_context(|| format!("failed to read {}", registry_path.display()))?;
+
+   serde_json::from_str::<Vec<DatasetRegistryEntry>>(&registry_json).with_context(|| {
+      format!(
+         "{} is not a valid dataset registry; fix or delete it before regenerating",
+         registry_path.display()
+      )
+   })
+}
+
 fn ordered_verse_map(verse_map: &HashMap<i32, VerseRef>) -> BTreeMap<i32, VerseRef> {
    verse_map
       .iter()
@@ -1238,28 +1258,11 @@ fn write_adjacency_files(
    output: &Path,
    cross_reference_edges: &[BibleEdge],
    study_note_edges: &[BibleEdge],
+   verse_map: &HashMap<i32, VerseRef>,
    pretty: bool,
 ) -> Result<()> {
    let all_edges = combined_edges(cross_reference_edges, study_note_edges);
-   let mut source_adjacency: BTreeMap<u8, BTreeMap<i32, SourceAdjacency>> = BTreeMap::new();
-   let mut target_adjacency: BTreeMap<u8, BTreeMap<i32, TargetAdjacency>> = BTreeMap::new();
-
-   for edge in &all_edges {
-      source_adjacency
-         .entry(edge.source_book_number)
-         .or_default()
-         .entry(edge.source_verse_id)
-         .or_default()
-         .outgoing
-         .push(AdjacentEdge::from(edge));
-      target_adjacency
-         .entry(edge.target_book_number)
-         .or_default()
-         .entry(edge.target_start_verse_id)
-         .or_default()
-         .incoming
-         .push(AdjacentEdge::from(edge));
-   }
+   let (source_adjacency, target_adjacency) = build_adjacency(&all_edges, verse_map);
 
    for book in BOOKS {
       let file_name = book_file_name(book.book_number);
@@ -1285,6 +1288,57 @@ fn write_adjacency_files(
    }
 
    Ok(())
+}
+
+type SourceAdjacencyByBook = BTreeMap<u8, BTreeMap<i32, SourceAdjacency>>;
+type TargetAdjacencyByBook = BTreeMap<u8, BTreeMap<i32, TargetAdjacency>>;
+
+/// Builds per-book adjacency maps.
+///
+/// Incoming edges are indexed under *every* mapped verse inside the cited range
+/// (`target_start..=target_end`), not only the range start, so a verse that is cited only as part
+/// of a range (for example "Ps. 104:1-35") still lists its incoming references. Each verse is
+/// filed under its own book, which matters for the ranges that cross a chapter or book boundary.
+fn build_adjacency(
+   edges: &[BibleEdge],
+   verse_map: &HashMap<i32, VerseRef>,
+) -> (SourceAdjacencyByBook, TargetAdjacencyByBook) {
+   let mut source_adjacency = SourceAdjacencyByBook::new();
+   let mut target_adjacency = TargetAdjacencyByBook::new();
+
+   for edge in edges {
+      let adjacent_edge = AdjacentEdge::from(edge);
+      source_adjacency
+         .entry(edge.source_book_number)
+         .or_default()
+         .entry(edge.source_verse_id)
+         .or_default()
+         .outgoing
+         .push(adjacent_edge.clone());
+
+      // A reversed range is treated as a single-verse citation of its start.
+      let range_end = edge.target_end_verse_id.max(edge.target_start_verse_id);
+
+      for target_verse_id in edge.target_start_verse_id..=range_end {
+         let target_book_number = if target_verse_id == edge.target_start_verse_id {
+            edge.target_book_number
+         } else if let Some(verse) = verse_map.get(&target_verse_id) {
+            verse.book_number
+         } else {
+            continue;
+         };
+
+         target_adjacency
+            .entry(target_book_number)
+            .or_default()
+            .entry(target_verse_id)
+            .or_default()
+            .incoming
+            .push(adjacent_edge.clone());
+      }
+   }
+
+   (source_adjacency, target_adjacency)
 }
 
 fn fetch_verse_text(
@@ -1455,12 +1509,20 @@ fn publication_locale(input: &Path, publication_symbol: &str) -> String {
 fn write_json(path: PathBuf, value: &(impl Serialize + ?Sized), pretty: bool) -> Result<()> {
    let file =
       File::create(&path).with_context(|| format!("failed to create {}", path.display()))?;
+   // Without buffering serde_json issues one write syscall per token, which is very slow for the
+   // multi-megabyte verse index and edge files.
+   let mut writer = BufWriter::new(file);
 
    if pretty {
-      serde_json::to_writer_pretty(file, value)?;
+      serde_json::to_writer_pretty(&mut writer, value)?;
    } else {
-      serde_json::to_writer(file, value)?;
+      serde_json::to_writer(&mut writer, value)?;
    }
+
+   // Flush explicitly: BufWriter's Drop swallows write errors (e.g. a full disk).
+   writer
+      .flush()
+      .with_context(|| format!("failed to write {}", path.display()))?;
 
    Ok(())
 }
@@ -1490,6 +1552,158 @@ mod tests {
          Some(12)
       );
       assert_eq!(parse_verse_number(""), None);
+   }
+
+   fn verse(
+      jwpub_verse_id: i32,
+      book_number: u8,
+      chapter_number: u16,
+      verse_number: u16,
+   ) -> VerseRef {
+      VerseRef {
+         jwpub_verse_id,
+         canonical_verse_id: canonical_verse_id(book_number, chapter_number, verse_number),
+         book_number,
+         chapter_number,
+         verse_number,
+         label: format!("{book_number} {chapter_number}:{verse_number}"),
+      }
+   }
+
+   fn edge(source: &VerseRef, start: &VerseRef, end: &VerseRef) -> BibleEdge {
+      BibleEdge {
+         source_verse_id: source.jwpub_verse_id,
+         target_start_verse_id: start.jwpub_verse_id,
+         target_end_verse_id: end.jwpub_verse_id,
+         kind: EdgeKind::CrossReference,
+         source_book_number: source.book_number,
+         target_book_number: start.book_number,
+         source_chapter_number: source.chapter_number,
+         target_chapter_number: start.chapter_number,
+         paragraph_ordinal: None,
+         sort_position: None,
+         commentary_id: None,
+         document_id: None,
+      }
+   }
+
+   #[test]
+   fn target_adjacency_indexes_every_verse_in_a_cited_range() {
+      // Jude 1:25 (id 10) cites Revelation 1:1-3 (ids 20..=22); id 21 is not mapped and must be
+      // skipped.
+      let jude = verse(10, 65, 1, 25);
+      let rev_1 = verse(20, 66, 1, 1);
+      let rev_3 = verse(22, 66, 1, 3);
+      let verse_map = HashMap::from([(10, jude.clone()), (20, rev_1.clone()), (22, rev_3.clone())]);
+      let edges = vec![edge(&jude, &rev_1, &rev_3)];
+
+      let (source, target) = build_adjacency(&edges, &verse_map);
+
+      assert_eq!(source[&65][&10].outgoing.len(), 1);
+      let revelation = &target[&66];
+      assert_eq!(revelation[&20].incoming.len(), 1);
+      assert_eq!(revelation[&22].incoming.len(), 1);
+      assert!(!revelation.contains_key(&21));
+      assert_eq!(revelation[&22].incoming[0].source, 10);
+   }
+
+   #[test]
+   fn target_adjacency_files_range_verses_under_their_own_book() {
+      let source_verse = verse(1, 1, 1, 1);
+      let jude_end = verse(30, 65, 1, 25);
+      let rev_start = verse(31, 66, 1, 1);
+      let verse_map = HashMap::from([
+         (1, source_verse.clone()),
+         (30, jude_end.clone()),
+         (31, rev_start.clone()),
+      ]);
+      let edges = vec![edge(&source_verse, &jude_end, &rev_start)];
+
+      let (_, target) = build_adjacency(&edges, &verse_map);
+
+      assert!(target[&65].contains_key(&30));
+      assert!(target[&66].contains_key(&31));
+      assert!(!target[&65].contains_key(&31));
+   }
+
+   #[test]
+   fn target_adjacency_treats_reversed_ranges_as_single_verse() {
+      let source_verse = verse(1, 1, 1, 1);
+      let start = verse(9, 2, 1, 2);
+      let end = verse(8, 2, 1, 1);
+      let verse_map = HashMap::from([
+         (1, source_verse.clone()),
+         (8, end.clone()),
+         (9, start.clone()),
+      ]);
+      let edges = vec![edge(&source_verse, &start, &end)];
+
+      let (_, target) = build_adjacency(&edges, &verse_map);
+
+      assert_eq!(target[&2].len(), 1);
+      assert!(target[&2].contains_key(&9));
+   }
+
+   #[test]
+   fn registry_read_fails_loudly_on_corrupt_json() {
+      let directory = tempfile::tempdir().expect("temp dir should create");
+      let registry_path = directory.path().join("datasets.json");
+
+      assert!(
+         read_dataset_registry(&registry_path)
+            .expect("a missing registry is fine")
+            .is_empty()
+      );
+
+      fs::write(&registry_path, "{ not json").expect("registry should write");
+      assert!(read_dataset_registry(&registry_path).is_err());
+   }
+
+   #[test]
+   fn registry_update_keeps_other_datasets() {
+      let directory = tempfile::tempdir().expect("temp dir should create");
+      let output = directory.path().join("nwt");
+      fs::create_dir_all(&output).expect("output dir should create");
+      fs::write(
+         directory.path().join("datasets.json"),
+         r#"[{"datasetId":"rbi8","publicationSymbol":"Rbi8","publicationTitle":"R","publicationYear":1984,"language":"English","hasVerseText":true}]"#,
+      )
+      .expect("registry should write");
+      let manifest = ManifestExport {
+         dataset_id: "nwt".to_string(),
+         publication_symbol: "nwt".to_string(),
+         publication_title: "N".to_string(),
+         publication_year: Some(2013),
+         language: "English".to_string(),
+         generated_at: "2026-01-01T00:00:00Z".to_string(),
+         schema_version: 1,
+         available_edge_kinds: Vec::new(),
+         has_verse_text: false,
+      };
+
+      update_dataset_registry(&output, &manifest, false).expect("registry should update");
+
+      let entries = read_dataset_registry(&directory.path().join("datasets.json"))
+         .expect("registry should parse");
+      let ids = entries
+         .iter()
+         .map(|entry| entry.dataset_id.as_str())
+         .collect::<Vec<_>>();
+      assert_eq!(ids, vec!["nwt", "rbi8"]);
+   }
+
+   #[test]
+   fn write_json_flushes_complete_documents() {
+      let directory = tempfile::tempdir().expect("temp dir should create");
+      let path = directory.path().join("big.json");
+      let value = (0..50_000).collect::<Vec<i32>>();
+
+      write_json(path.clone(), &value, false).expect("json should write");
+
+      let parsed: Vec<i32> =
+         serde_json::from_str(&fs::read_to_string(path).expect("json should read"))
+            .expect("json should parse");
+      assert_eq!(parsed.len(), 50_000);
    }
 
    #[test]

@@ -74,6 +74,9 @@ pub enum JWPUBError {
 
    #[error("manifest is missing publication.fileName")]
    MissingDatabaseName,
+
+   #[error("manifest publication.fileName is not a plain file name: {0}")]
+   UnsafeDatabaseName(String),
 }
 
 /// Opens a JWPub archive and returns a SQLite connection backed by a temp file.
@@ -83,6 +86,8 @@ pub fn open_jwpub(path: &Path) -> Result<OpenedJWPUB, JWPUBError> {
    let manifest = read_manifest(&mut outer_zip)?;
    let database_bytes = read_database_bytes(&manifest, &mut outer_zip)?;
    let temp_dir = TempDir::with_prefix("bibliamap-jwpub-")?;
+   // `file_name` comes from an untrusted archive; `validate_database_name` guarantees it is a
+   // single normal path component so the join cannot escape the temp dir.
    let database_path = temp_dir.path().join(&manifest.publication.file_name);
    let mut database_file = File::create(&database_path)?;
    database_file.write_all(&database_bytes)?;
@@ -112,9 +117,7 @@ fn read_database_bytes<R: Read + std::io::Seek>(
    manifest: &JWPUBManifest,
    zip_archive: &mut ZipArchive<R>,
 ) -> Result<Vec<u8>, JWPUBError> {
-   if manifest.publication.file_name.is_empty() {
-      return Err(JWPUBError::MissingDatabaseName);
-   }
+   validate_database_name(&manifest.publication.file_name)?;
 
    let mut contents_file = zip_archive.by_name("contents")?;
    let mut contents_bytes = Vec::new();
@@ -128,6 +131,26 @@ fn read_database_bytes<R: Read + std::io::Seek>(
    database_file.read_to_end(&mut database_bytes)?;
 
    Ok(database_bytes)
+}
+
+/// Rejects database names that are empty or would resolve outside the extraction directory
+/// (absolute paths, `..`, or nested directories).
+fn validate_database_name(file_name: &str) -> Result<(), JWPUBError> {
+   if file_name.is_empty() {
+      return Err(JWPUBError::MissingDatabaseName);
+   }
+
+   let mut components = Path::new(file_name).components();
+   let is_plain_name = matches!(
+      (components.next(), components.next()),
+      (Some(std::path::Component::Normal(_)), None)
+   ) && !file_name.contains(['/', '\\']);
+
+   if is_plain_name {
+      Ok(())
+   } else {
+      Err(JWPUBError::UnsafeDatabaseName(file_name.to_string()))
+   }
 }
 
 #[cfg(test)]
@@ -192,6 +215,53 @@ mod tests {
       };
 
       assert!(matches!(error, JWPUBError::Zip(_)));
+   }
+
+   #[test]
+   fn rejects_database_names_that_escape_the_temp_dir() {
+      for file_name in [
+         "../evil.db",
+         "/tmp/evil.db",
+         "nested/evil.db",
+         "..",
+         "a\\b.db",
+      ] {
+         assert!(
+            matches!(
+               validate_database_name(file_name),
+               Err(JWPUBError::UnsafeDatabaseName(_))
+            ),
+            "{file_name} should be rejected"
+         );
+      }
+      assert!(matches!(
+         validate_database_name(""),
+         Err(JWPUBError::MissingDatabaseName)
+      ));
+      assert!(validate_database_name("nwtsty_E.db").is_ok());
+   }
+
+   #[test]
+   fn open_rejects_traversal_file_name() {
+      let archive = build_jwpub_archive(
+         r#"{
+            "publication": {
+               "fileName": "../escaped.db",
+               "title": "Sample",
+               "symbol": "smp",
+               "year": 2026,
+               "language": 0,
+               "publicationType": "Bible"
+            }
+         }"#,
+         Some(("../escaped.db", b"not a database".as_slice())),
+      );
+      let error = match open_jwpub(archive.path()) {
+         Ok(_) => panic!("archive should fail"),
+         Err(error) => error,
+      };
+
+      assert!(matches!(error, JWPUBError::UnsafeDatabaseName(_)));
    }
 
    fn build_sample_database_bytes() -> Vec<u8> {

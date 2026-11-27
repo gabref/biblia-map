@@ -897,6 +897,21 @@
       flex: 1;
    }
 
+   /* Wide sidebar: the edition picker gets its own row; language + theme sit below it. */
+   @media (min-width: 1101px) {
+      .sidebar-tools {
+         flex-wrap: wrap;
+      }
+
+      .sidebar-tools .dataset-badge {
+         flex-basis: 100%;
+      }
+
+      .sidebar-tools .language-switcher {
+         margin-right: auto;
+      }
+   }
+
    /* ---------- Phones: compact 56px header, 44px targets, safe areas ---------- */
    @media (max-width: 760px) {
       .sidebar {

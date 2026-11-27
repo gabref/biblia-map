@@ -1,6 +1,7 @@
 #![allow(clippy::upper_case_acronyms)]
 //! Build-time extractor for BibliaMap static frontend data.
 
+mod components;
 mod derived;
 mod notes;
 
@@ -329,6 +330,7 @@ fn main() -> Result<()> {
       derived::FEATURE_SEARCH_INDEX.to_string(),
       derived::FEATURE_VERSE_DEGREE.to_string(),
       derived::FEATURE_CHAPTER_MATRICES.to_string(),
+      derived::FEATURE_COMPONENTS.to_string(),
    ];
    if !study_notes.is_empty() {
       manifest_export
@@ -368,6 +370,16 @@ fn main() -> Result<()> {
       pretty,
    )?;
    derived::write_chapter_matrices(&args.output, &chapter_matrices, pretty)?;
+   write_json(
+      args.output.join("stats.components.json"),
+      &components::build_components_export(
+         &cross_reference_edges,
+         &study_note_edges,
+         &verse_map,
+         &books,
+      ),
+      pretty,
+   )?;
    if study_notes.is_empty() {
       derived::remove_if_exists(&args.output.join("study-notes"))?;
    } else {

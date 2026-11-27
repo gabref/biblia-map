@@ -25,6 +25,7 @@ pub const FEATURE_VERSE_DEGREE: &str = "verse-degree";
 pub const FEATURE_CHAPTER_MATRICES: &str = "chapter-matrices";
 pub const FEATURE_STUDY_NOTE_TEXT: &str = "study-note-text";
 pub const FEATURE_FOOTNOTE_TEXT: &str = "footnote-text";
+pub const FEATURE_COMPONENTS: &str = "components";
 
 /// `search-index.json`: everything a book/chapter/verse picker or a reference parser needs,
 /// without loading `verse-index.json` or `chapters.json`.

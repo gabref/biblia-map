@@ -57,6 +57,13 @@ test.describe('verse study', () => {
       await expect(jwLibrary).toHaveAttribute('target', '_blank');
    });
 
+   test('a JW Library hand-off on /open lands on the verse in the matching edition', async ({ page }) => {
+      await page.goto('/open?srcid=jwlshare&wtlocale=I&prefer=lang&bible=43003016&pub=nwtsty');
+
+      await expect(page).toHaveURL(/\/verse\/john\/3\/16\?ds=nwtsty-i$/);
+      await expect(page.locator('main h1')).toContainText('3:16');
+   });
+
    test('studying a connection updates the URL and the trail; Back restores', async ({ page }, testInfo) => {
       await gotoReady(page, JOHN_3_16);
 

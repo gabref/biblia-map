@@ -91,6 +91,14 @@ describe('parseLocation / hrefs', () => {
       expect(parse('/blocks').redirectTo).toBe('/insights?tab=clusters');
    });
 
+   it('turns JW Library hand-offs on /open into canonical pages', () => {
+      expect(parse('/open?bible=43003016&wtlocale=I&pub=nwtsty').redirectTo).toBe('/verse/john/3/16?ds=nwtsty-i');
+      expect(parse('/open?bible=19023000-19023999&wtlocale=E&pub=nwtsty').redirectTo).toBe('/read/psalms/23?ds=nwtsty');
+      expect(parse('/open?ds=rbi8&bible=43003016&wtlocale=I').redirectTo).toBe('/verse/john/3/16?ds=rbi8');
+      expect(parse(`/open?text=${encodeURIComponent('Look: https://www.jw.org/finder?bible=40024014&pub=nwt')}`).redirectTo).toBe('/verse/matthew/24/14?ds=nwt');
+      expect(parse('/open?text=hello').redirectTo).toBe('/');
+   });
+
    it('routeHref inverts parseLocation', () => {
       for (const path of [ '/', '/about', '/study', '/study/a%20b', '/insights?tab=hubs', '/book/jude', '/read/psalms/119', '/verse/3-john/1/14?ds=nwt' ]) {
          const { route, params } = parse(path);

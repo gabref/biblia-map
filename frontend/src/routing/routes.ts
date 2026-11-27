@@ -29,7 +29,7 @@ import { useMemo, useSyncExternalStore } from 'react';
 
 import type { DirectionMode, EdgeKindFilter } from '../types/generated';
 import { bookByNumber, bookNumberFromSlug, bookSlug } from './bookSlugs';
-
+import { targetFromOpenParams } from './inboundLinks';
 export { BOOKS, bookByNumber, bookNumberFromSlug, bookSlug } from './bookSlugs';
 export type { BookSlugEntry } from './bookSlugs';
 
@@ -248,6 +248,24 @@ function parsePath(segments: string[], search: URLSearchParams): Omit<ParsedLoca
    }
 }
 
+function openLocation(search: URLSearchParams, parsed: RouteParams): ParsedLocation {
+   const target = targetFromOpenParams(search);
+   // Only BibliaMap's own params survive the redirect; finder params (`bible`, `wtlocale`, …) are consumed.
+   const params: RouteParams = { ...parsed };
+
+   if (!params.ds && target?.datasetId) {
+      params.ds = target.datasetId;
+   }
+
+   const route: AppRoute = !target
+      ? { name: 'home' }
+      : target.kind === 'chapter'
+         ? { name: 'read', book: target.book, chapter: target.chapter }
+         : { name: 'verse', book: target.book, chapter: target.chapter, verse: target.verse };
+
+   return { route, params, redirectTo: routeHref(route, params) };
+}
+
 /** Parses a full URL into a route + validated query params. Never throws. */
 export function parseLocation(url: URL): ParsedLocation {
    let segments: string[];
@@ -259,6 +277,12 @@ export function parseLocation(url: URL): ParsedLocation {
    }
 
    const params = parseParams(url.searchParams);
+
+   // `/open?bible=43003016&wtlocale=I…` or a shared jw.org link: a JW Library hand-off, resolved to a canonical page.
+   if (segments.length === 1 && segments[0] === 'open') {
+      return openLocation(url.searchParams, params);
+   }
+
    const { route, redirectTo } = parsePath(segments, url.searchParams);
 
    if (redirectTo !== undefined) {

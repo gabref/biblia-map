@@ -255,6 +255,12 @@ describe('searchCitations — English and Italian citations', () => {
       expect(searchCitations('zzzzzz 1', EN)).toEqual([]);
    });
 
+   it('resolves a pasted JW Library share link to its verse or chapter', () => {
+      expect(topRef('Giovanni 3:16 https://www.jw.org/finder?srcid=jwlshare&wtlocale=I&prefer=lang&bible=43003016&pub=nwtsty')).toBe('verse 43 3:16');
+      expect(topRef('https://wol.jw.org/en/wol/b/r1/lp-e/nwtsty/19/23')).toBe('chapter 19 23');
+      expect(searchCitations('https://www.jw.org/finder?bible=46013004-46013007', EN)[0]).toMatchObject({ kind: 'verse', verse: 4, verseEnd: 7 });
+   });
+
    it('works on the static English table before any data loads', () => {
       expect(topRef('Gv 3:16', STATIC_SEARCH_DATA)).toBe('verse 43 3:16');
    });

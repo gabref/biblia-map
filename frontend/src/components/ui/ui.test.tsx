@@ -149,16 +149,26 @@ function ThemeHarness(): React.ReactElement {
 }
 
 describe('theme', () => {
-   it('follows the OS until toggled, then stores and applies the choice', () => {
+   it('is dark until changed, then stores and applies each choice', () => {
       window.localStorage.clear();
       document.documentElement.removeAttribute('data-theme');
       render(<ThemeHarness />);
 
+      expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
+      expect(window.localStorage.getItem('bibliamap-theme')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to light theme' }));
+
+      expect(document.documentElement).toHaveAttribute('data-theme', 'light');
+      expect(window.localStorage.getItem('bibliamap-theme')).toBe('light');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Match the device theme' }));
+
       expect(document.documentElement).not.toHaveAttribute('data-theme');
+      expect(window.localStorage.getItem('bibliamap-theme')).toBe('system');
 
       fireEvent.click(screen.getByRole('button', { name: 'Switch to dark theme' }));
 
       expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
-      expect(window.localStorage.getItem('bibliamap-theme')).toBe('dark');
    });
 });

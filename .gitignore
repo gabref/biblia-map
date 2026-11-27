@@ -12,3 +12,9 @@ assets/*.jwpub
 .env
 .env.*
 .DS_Store
+
+# Tooling installed next to the asset scripts (see scripts/brand/README.md)
+scripts/node_modules/
+scripts/package.json
+scripts/package-lock.json
+__pycache__/

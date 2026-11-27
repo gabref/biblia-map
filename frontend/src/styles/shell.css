@@ -89,11 +89,6 @@
       font-size: var(--text-xs);
    }
 
-   .nav-section-label {
-      padding: 0 var(--space-3);
-      margin-bottom: calc(var(--space-2) * -1 - var(--space-2));
-   }
-
    /* ---------- Navigation ---------- */
    .nav-list {
       position: relative;
@@ -340,204 +335,12 @@
       gap: var(--space-2);
    }
 
-   /* ---------- Stat card ---------- */
-   .stat-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: var(--space-4);
-   }
-
-   .stat-card {
-      display: grid;
-      align-content: start;
-      gap: var(--space-3);
-      min-width: 0;
-      padding: var(--space-5);
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-lg);
-      animation: rise-in var(--dur-slow) var(--ease-enter) backwards;
-   }
-
-   .stat-grid > .stat-card:nth-child(2) {
-      animation-delay: calc(var(--stagger) * 1);
-   }
-
-   .stat-grid > .stat-card:nth-child(3) {
-      animation-delay: calc(var(--stagger) * 2);
-   }
-
-   .stat-grid > .stat-card:nth-child(4) {
-      animation-delay: calc(var(--stagger) * 3);
-   }
-
-   .stat-card-label {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-      color: var(--ink-2);
-      font-size: var(--text-sm);
-      font-weight: 550;
-   }
-
-   .stat-icon {
-      display: inline-flex;
-      flex-shrink: 0;
-      color: var(--ink-3);
-   }
-
-   .stat-icon svg {
-      width: 16px;
-      height: 16px;
-   }
-
-   .stat-card p {
-      margin: 0;
-   }
-
-   .stat-card strong {
-      display: block;
-      font-family: var(--font-serif);
-      font-size: clamp(1.75rem, 1.3rem + 1.4vw, 2.25rem);
-      font-weight: 500;
-      line-height: 1;
-      letter-spacing: -0.02em;
-      font-variant-numeric: tabular-nums lining-nums;
-   }
-
-   .stat-card-detail {
-      color: var(--ink-3);
-      font-size: var(--text-sm);
-   }
-
-   /* ---------- Filter panel ---------- */
-   .filter-panel {
-      display: flex;
-      align-items: center;
-      gap: var(--space-5);
-      padding: var(--space-4) var(--space-5);
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-lg);
-   }
-
-   .filter-panel-title {
-      flex-shrink: 0;
-      color: var(--ink-3);
-      font-size: var(--text-xs);
-      font-weight: 650;
-      letter-spacing: var(--tracking-caps);
-      text-transform: uppercase;
-   }
-
-   .filter-panel-body {
-      display: flex;
-      flex: 1;
-      flex-wrap: wrap;
-      align-items: flex-end;
-      gap: var(--space-4) var(--space-5);
-   }
-
-   .control-group,
-   .select-control,
-   .range-control,
    .toggle-control {
       display: grid;
       gap: var(--space-2);
       color: var(--ink-2);
       font-size: var(--text-xs);
       font-weight: 600;
-   }
-
-   /* ---------- Segmented control ---------- */
-   .segmented-control {
-      position: relative;
-      display: inline-flex;
-      max-width: 100%;
-      padding: 3px;
-      background: var(--surface-hover);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-md);
-   }
-
-   .segmented-control::before {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: var(--ind-w, 0);
-      height: var(--ind-h, 0);
-      content: "";
-      background: var(--surface-raised);
-      border-radius: var(--radius-sm);
-      box-shadow:
-         var(--shadow-1),
-         0 0 0 1px var(--line);
-      opacity: 0;
-      translate: var(--ind-x, 0) var(--ind-y, 0);
-   }
-
-   .segmented-control[data-indicator="ready"]::before {
-      opacity: 1;
-      transition:
-         translate var(--dur-base) var(--ease-standard),
-         width var(--dur-base) var(--ease-standard);
-   }
-
-   .segmented-control button {
-      position: relative;
-      flex-shrink: 0;
-      min-height: calc(var(--control-h) - 8px);
-      padding: 0 var(--space-3);
-      color: var(--ink-3);
-      background: transparent;
-      border: 0;
-      border-radius: var(--radius-sm);
-      font-size: var(--text-sm);
-      font-weight: 550;
-      white-space: nowrap;
-      transition: color var(--dur-fast) var(--ease-standard);
-   }
-
-   .segmented-control button:hover {
-      color: var(--ink);
-   }
-
-   .segmented-control button.active {
-      color: var(--ink);
-   }
-
-   /* Before the indicator is measured (and without JS layout), the active button paints itself. */
-   .segmented-control:not([data-indicator="ready"]) button.active {
-      background: var(--surface-raised);
-      box-shadow:
-         var(--shadow-1),
-         0 0 0 1px var(--line);
-   }
-
-   .select-control select {
-      min-width: 140px;
-   }
-
-   .range-control {
-      grid-template-columns: 1fr auto;
-      align-items: center;
-      min-width: 220px;
-   }
-
-   .range-control span {
-      grid-column: 1 / -1;
-   }
-
-   .range-control input {
-      min-height: calc(var(--control-h) - 8px);
-   }
-
-   .range-control strong {
-      min-width: 3ch;
-      color: var(--ink);
-      font-size: var(--text-sm);
-      text-align: right;
-      font-variant-numeric: tabular-nums;
    }
 
    .toggle-control {
@@ -591,17 +394,6 @@
    }
 
    /* ---------- Empty & error ---------- */
-   .empty-state {
-      display: grid;
-      gap: var(--space-2);
-      place-items: center;
-      min-height: 200px;
-      padding: var(--space-8) var(--space-5);
-      color: var(--ink-3);
-      font-size: var(--text-sm);
-      text-align: center;
-   }
-
    .error-state {
       display: flex;
       align-items: flex-start;
@@ -680,7 +472,6 @@
       }
 
       .brand-subtitle,
-      .nav-section-label,
       .sidebar-credit {
          display: none;
       }
@@ -758,10 +549,6 @@
          display: flex;
          padding: 0 var(--space-5) var(--space-6);
       }
-
-      .stat-grid {
-         grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
    }
 
    @media (max-width: 760px) {
@@ -785,49 +572,6 @@
 
       .page-description {
          font-size: var(--text-sm);
-      }
-
-      .stat-grid {
-         gap: var(--space-3);
-      }
-
-      .stat-card {
-         gap: var(--space-2);
-         padding: var(--space-4);
-      }
-
-      .filter-panel {
-         display: grid;
-         gap: var(--space-3);
-         padding: var(--space-4);
-      }
-
-      .filter-panel-body {
-         display: grid;
-         gap: var(--space-4);
-      }
-
-      .select-control select,
-      .range-control,
-      .range-control input {
-         width: 100%;
-         min-width: 0;
-      }
-
-      .segmented-control {
-         display: flex;
-         overflow-x: auto;
-         scrollbar-width: none;
-      }
-
-      .segmented-control button {
-         flex: 1;
-         min-height: var(--tap-min);
-      }
-
-      .select-control select {
-         min-height: var(--tap-min);
-         font-size: var(--text-md);
       }
 
       .error-state {
@@ -871,30 +615,6 @@
       box-shadow:
          var(--shadow-1),
          0 0 0 1px var(--line);
-   }
-
-   /* ---------- Collapsed filters (FilterPanel collapsible) ---------- */
-   .filter-panel-trigger {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-   }
-
-   .filter-panel-trigger .ui-button {
-      min-height: var(--tap-min);
-   }
-
-   .filter-panel-body--sheet {
-      display: grid;
-      gap: var(--space-5);
-   }
-
-   .filter-panel-body--sheet .segmented-control {
-      display: flex;
-   }
-
-   .filter-panel-body--sheet .segmented-control button {
-      flex: 1;
    }
 
    /* Wide sidebar: the edition picker gets its own row; language + theme sit below it. */

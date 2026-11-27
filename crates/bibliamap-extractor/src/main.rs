@@ -1,12 +1,16 @@
 #![allow(clippy::upper_case_acronyms)]
 //! Build-time extractor for BibliaMap static frontend data.
 
+mod derived;
+mod notes;
+
 use std::{
    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
    fs::{self, File},
    io::{BufWriter, Write},
    path::{Path, PathBuf},
    thread,
+   time::Duration,
 };
 
 use anyhow::{Context, Result};
@@ -18,7 +22,7 @@ use bibliamap_core::{
 };
 use chrono::{SecondsFormat, Utc};
 use clap::Parser;
-use jwpub_reader::open_jwpub;
+use jwpub_reader::{ContentKey, open_jwpub};
 use reqwest::blocking::Client;
 use rusqlite::{Connection, Row};
 use scraper::{Html, Selector};
@@ -61,6 +65,10 @@ struct ManifestExport {
    schema_version: u8,
    available_edge_kinds: Vec<String>,
    has_verse_text: bool,
+   /// Optional file families present in this dataset (see `derived::FEATURE_*`). Additive: an
+   /// older manifest without this field means none of the optional files exist.
+   #[serde(default, skip_serializing_if = "Vec::is_empty")]
+   features: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -259,6 +267,7 @@ fn main() -> Result<()> {
          EdgeKind::StudyNoteReference.label().to_string(),
       ],
       has_verse_text: false,
+      features: Vec::new(),
    };
    let verse_text = if args.include_text && !args.no_text {
       let text = fetch_verse_text(
@@ -303,6 +312,35 @@ fn main() -> Result<()> {
    let verse_stats = build_verse_stats(&combined_edges, &verse_map);
    let pretty = args.pretty && !args.compact;
 
+   let content_key = ContentKey::from_connection(connection)
+      .context("failed to derive the publication content key")?;
+   let search_index = derived::build_search_index(&books, &verse_map, &manifest_export.language);
+   anyhow::ensure!(
+      derived::search_keys_are_unique(&search_index),
+      "search index keys must map to exactly one book"
+   );
+   let verse_degree =
+      derived::build_verse_degree(&cross_reference_edges, &study_note_edges, &verse_map);
+   let chapter_matrices =
+      derived::build_chapter_matrices(&cross_reference_edges, &study_note_edges);
+   let study_notes = notes::extract_study_notes(connection, &content_key, &verse_map)?;
+   let footnotes = notes::extract_footnotes(connection, &content_key, &verse_map)?;
+   manifest_export.features = vec![
+      derived::FEATURE_SEARCH_INDEX.to_string(),
+      derived::FEATURE_VERSE_DEGREE.to_string(),
+      derived::FEATURE_CHAPTER_MATRICES.to_string(),
+   ];
+   if !study_notes.is_empty() {
+      manifest_export
+         .features
+         .push(derived::FEATURE_STUDY_NOTE_TEXT.to_string());
+   }
+   if !footnotes.is_empty() {
+      manifest_export
+         .features
+         .push(derived::FEATURE_FOOTNOTE_TEXT.to_string());
+   }
+
    write_generated_data(
       &args.output,
       pretty,
@@ -322,6 +360,30 @@ fn main() -> Result<()> {
       &books,
       &verse_text,
    )?;
+
+   write_json(args.output.join("search-index.json"), &search_index, pretty)?;
+   write_json(
+      args.output.join("stats.verse-degree.json"),
+      &verse_degree,
+      pretty,
+   )?;
+   derived::write_chapter_matrices(&args.output, &chapter_matrices, pretty)?;
+   if study_notes.is_empty() {
+      derived::remove_if_exists(&args.output.join("study-notes"))?;
+   } else {
+      derived::write_per_book_files(&args.output.join("study-notes"), &study_notes, pretty)?;
+   }
+   if footnotes.is_empty() {
+      derived::remove_if_exists(&args.output.join("footnotes"))?;
+   } else {
+      derived::write_per_book_files(&args.output.join("footnotes"), &footnotes, pretty)?;
+   }
+   eprintln!(
+      "Wrote optional outputs: {} ({} study-note verses, {} footnote verses)",
+      manifest_export.features.join(", "),
+      study_notes.values().map(BTreeMap::len).sum::<usize>(),
+      footnotes.values().map(BTreeMap::len).sum::<usize>(),
+   );
 
    println!("{}", serde_json::to_string_pretty(&summary)?);
 
@@ -1351,6 +1413,8 @@ fn fetch_verse_text(
 
    let client = Client::builder()
       .user_agent("BibliaMap extractor")
+      .connect_timeout(Duration::from_secs(15))
+      .timeout(Duration::from_secs(60))
       .build()
       .context("failed to build verse text HTTP client")?;
    let mut text_by_book = BTreeMap::<u8, BTreeMap<i32, VerseTextExport>>::new();
@@ -1407,6 +1471,50 @@ fn fetch_verse_text(
    Ok(text_by_book)
 }
 
+/// Fetches a page body, retrying transient failures (timeouts, connection errors, 5xx, 429) with
+/// exponential backoff. Client errors other than 429 fail immediately.
+fn fetch_with_retry(client: &Client, url: &str) -> Result<String> {
+   const ATTEMPTS: u32 = 4;
+   let mut last_error = None;
+
+   for attempt in 0..ATTEMPTS {
+      if attempt > 0 {
+         thread::sleep(Duration::from_secs(2_u64.pow(attempt)));
+      }
+
+      let response = match client.get(url).send() {
+         Ok(response) => response,
+         Err(error) => {
+            last_error = Some(anyhow::Error::new(error).context(format!("failed to fetch {url}")));
+            continue;
+         }
+      };
+      let status = response.status();
+      if status.is_server_error() || status.as_u16() == 429 {
+         last_error = Some(anyhow::anyhow!("{url} answered {status}"));
+         continue;
+      }
+      let response = response
+         .error_for_status()
+         .with_context(|| format!("failed response for {url}"))?;
+
+      match response.text() {
+         Ok(body) => return Ok(body),
+         Err(error) => {
+            last_error = Some(
+               anyhow::Error::new(error).context(format!("failed to read response body for {url}")),
+            );
+         }
+      }
+   }
+
+   Err(
+      last_error
+         .unwrap_or_else(|| anyhow::anyhow!("no attempt made"))
+         .context(format!("giving up on {url} after {ATTEMPTS} attempts")),
+   )
+}
+
 fn fetch_chapter_text(
    client: &Client,
    publication_symbol: &str,
@@ -1422,14 +1530,7 @@ fn fetch_chapter_text(
       "https://www.jw.org/finder?wtlocale={locale}&prefer=lang&bible={}&pub={publication_symbol}",
       first_verse.canonical_verse_id
    );
-   let html = client
-      .get(&finder_url)
-      .send()
-      .with_context(|| format!("failed to fetch {finder_url}"))?
-      .error_for_status()
-      .with_context(|| format!("failed response for {finder_url}"))?
-      .text()
-      .with_context(|| format!("failed to read response body for {finder_url}"))?;
+   let html = fetch_with_retry(client, &finder_url)?;
    let document = Html::parse_document(&html);
    let verse_selector = Selector::parse("span.verse").expect("verse selector should parse");
    let mut verses = Vec::new();
@@ -1679,6 +1780,7 @@ mod tests {
          schema_version: 1,
          available_edge_kinds: Vec::new(),
          has_verse_text: false,
+         features: Vec::new(),
       };
 
       update_dataset_registry(&output, &manifest, false).expect("registry should update");

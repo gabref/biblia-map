@@ -1,4 +1,14 @@
 node_modules
 dist
 coverage
+.vite
 *.tsbuildinfo
+*.log
+*.md
+**/*.test.ts
+**/*.test.tsx
+src/test
+Dockerfile
+.dockerignore
+.git
+.env*

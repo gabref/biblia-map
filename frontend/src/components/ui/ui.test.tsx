@@ -73,7 +73,7 @@ describe('Chip', () => {
    it('states reference direction in text, not colour alone', () => {
       render(<ReferenceChip reference="Hebrews 10:25" direction="incoming" />);
 
-      expect(screen.getByText(/Cites this verse/)).toBeInTheDocument();
+      expect(screen.getByText(/It points to this verse/)).toBeInTheDocument();
    });
 });
 
@@ -84,7 +84,7 @@ describe('VerseCard', () => {
       expect(container.querySelector('.ui-skeleton')).not.toBeNull();
 
       rerender(<VerseCard reference="Romans 1:12" text={null} />);
-      expect(screen.getByText(/not included in this dataset/)).toBeInTheDocument();
+      expect(screen.getByText(/not included in this edition/)).toBeInTheDocument();
 
       rerender(<VerseCard reference="Romans 1:12" text="an interchange of encouragement" />);
       expect(screen.getByText('an interchange of encouragement')).toBeInTheDocument();

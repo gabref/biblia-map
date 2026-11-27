@@ -1,5 +1,6 @@
 import { AlertTriangle, RotateCw } from 'lucide-react';
 
+import { useT } from '../i18n';
 import { Button } from './ui/Button';
 
 interface ErrorStateProps {
@@ -10,6 +11,8 @@ interface ErrorStateProps {
 }
 
 export function ErrorState({ title, error, onRetry }: ErrorStateProps): React.ReactElement {
+   const t = useT();
+
    return (
       <section className="error-state" role="alert">
          <AlertTriangle size={20} aria-hidden="true" />
@@ -22,7 +25,7 @@ export function ErrorState({ title, error, onRetry }: ErrorStateProps): React.Re
                leading={<RotateCw size={14} />}
                onClick={onRetry ?? (() => window.location.reload())}
             >
-               {onRetry ? 'Try again' : 'Reload page'}
+               {onRetry ? t('shell.error.retry') : t('shell.error.reload')}
             </Button>
          </div>
       </section>

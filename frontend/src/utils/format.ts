@@ -1,8 +1,12 @@
-// Constructing an Intl.NumberFormat is expensive; list views format thousands of values per render.
-const numberFormatter = new Intl.NumberFormat('en-US');
+/**
+ * Formatting helpers in the current UI locale (see i18n). These read the locale but do not
+ * subscribe to it: inside components prefer `useFormat()` from `../i18n`, which re-renders
+ * when the language changes.
+ */
+import { formatNumberIn, formatPercentIn, getLocale, t } from '../i18n';
 
 export function formatNumber(value: number): string {
-   return numberFormatter.format(value);
+   return formatNumberIn(getLocale(), value);
 }
 
 /**
@@ -13,35 +17,17 @@ export function formatNumber(value: number): string {
  * ">99%" instead.
  */
 export function formatPercent(value: number, total: number): string {
-   if (total === 0 || value <= 0) {
-      return '0%';
-   }
-
-   if (value >= total) {
-      return '100%';
-   }
-
-   const percent = (value / total) * 100;
-
-   if (percent < 1) {
-      return '<1%';
-   }
-
-   if (percent > 99) {
-      return '>99%';
-   }
-
-   return `${Math.round(percent)}%`;
+   return formatPercentIn(getLocale(), value, total);
 }
 
 export function edgeKindLabel(kind: number): string {
    if (kind === 0) {
-      return 'Cross reference';
+      return t('shell.edgeKind.crossref');
    }
 
    if (kind === 1) {
-      return 'Study note';
+      return t('shell.edgeKind.studyNote');
    }
 
-   return 'Footnote';
+   return t('shell.edgeKind.footnote');
 }

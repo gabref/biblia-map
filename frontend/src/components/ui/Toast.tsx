@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useT } from '../../i18n';
 import { cx } from '../../lib/cx';
 
 export type ToastTone = 'neutral' | 'success' | 'danger';
@@ -37,6 +38,7 @@ const toneIcons: Record<ToastTone, React.ReactNode> = {
 
 /** Mount once near the root. Renders the live region that toasts appear in. */
 export function ToastProvider({ children }: { children: React.ReactNode }): React.ReactElement {
+   const t = useT();
    const [ toasts, setToasts ] = useState<ToastRecord[]>([]);
    const nextIdRef = useRef(1);
    const timersRef = useRef(new Map<number, number>());
@@ -78,7 +80,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }): Reac
    return (
       <ToastContext.Provider value={api}>
          {children}
-         <div className="ui-toast-region" role="region" aria-label="Notifications" aria-live="polite">
+         <div className="ui-toast-region" role="region" aria-label={t('shell.notifications')} aria-live="polite">
             {toasts.map((record) => {
                const tone = record.tone ?? 'neutral';
 
@@ -110,7 +112,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }): Reac
                      <button
                         type="button"
                         className="ui-toast__close"
-                        aria-label="Dismiss notification"
+                        aria-label={t('shell.notifications.dismiss')}
                         onClick={() => dismiss(record.id)}
                      >
                         <X size={14} />

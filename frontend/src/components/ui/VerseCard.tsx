@@ -1,3 +1,4 @@
+import { useT } from '../../i18n';
 import { cx } from '../../lib/cx';
 import { Skeleton } from './Skeleton';
 
@@ -40,6 +41,7 @@ export function VerseCard({
    transitionName,
    className,
 }: VerseCardProps): React.ReactElement {
+   const t = useT();
    const classes = cx(
       'ui-verse',
       `ui-verse--${tone}`,
@@ -57,7 +59,7 @@ export function VerseCard({
          {text === undefined ? (
             <Skeleton lines={density === 'compact' ? 2 : 3} />
          ) : text === null ? (
-            <span className="ui-verse__missing">Verse text is not included in this dataset.</span>
+            <span className="ui-verse__missing">{t('shell.verse.missingText')}</span>
          ) : (
             <span className="ui-verse__text">{text}</span>
          )}

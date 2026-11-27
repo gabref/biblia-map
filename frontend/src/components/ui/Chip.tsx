@@ -1,5 +1,6 @@
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, X } from 'lucide-react';
 
+import { useT, type MessageKey } from '../../i18n';
 import { cx } from '../../lib/cx';
 
 export type ChipTone = 'neutral' | 'accent' | 'gilt' | 'rubric' | 'outgoing' | 'incoming' | 'both';
@@ -31,11 +32,12 @@ export function Chip({
    count,
    onClick,
    onRemove,
-   removeLabel = 'Remove',
+   removeLabel,
    className,
    title,
    children,
 }: ChipProps): React.ReactElement {
+   const t = useT();
    const classes = cx(
       'ui-chip',
       `ui-chip--${tone}`,
@@ -62,7 +64,7 @@ export function Chip({
             ) : (
                body
             )}
-            <button type="button" className="ui-chip__remove" aria-label={removeLabel} onClick={onRemove}>
+            <button type="button" className="ui-chip__remove" aria-label={removeLabel ?? t('shell.remove')} onClick={onRemove}>
                <X size={12} strokeWidth={2.5} />
             </button>
          </span>
@@ -99,17 +101,24 @@ const directionIcons: Record<ReferenceDirection, React.ReactNode> = {
    both: <ArrowLeftRight size={13} strokeWidth={2.4} />,
 };
 
-const directionNames: Record<ReferenceDirection, string> = {
-   outgoing: 'Cited by this verse',
-   incoming: 'Cites this verse',
-   both: 'Linked in both directions',
-};
+const directionKeys = {
+   outgoing: 'shell.direction.outgoing',
+   incoming: 'shell.direction.incoming',
+   both: 'shell.direction.both',
+} as const satisfies Record<ReferenceDirection, MessageKey>;
 
 /**
  * A scripture citation as a chip — the unit of navigation in BibliaMap.
  * Direction is encoded by colour, an arrow, and a text alternative (never colour alone).
  */
 export function ReferenceChip({ reference, direction, ...rest }: ReferenceChipProps): React.ReactElement {
+   const t = useT();
+   const directionNames: Record<ReferenceDirection, string> = {
+      outgoing: t(directionKeys.outgoing),
+      incoming: t(directionKeys.incoming),
+      both: t(directionKeys.both),
+   };
+
    return (
       <Chip
          tone={direction ?? 'neutral'}

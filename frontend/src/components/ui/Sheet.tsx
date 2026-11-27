@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useEffect, useId, useRef } from 'react';
 
+import { useT } from '../../i18n';
 import { cx } from '../../lib/cx';
 import { IconButton } from './Button';
 
@@ -44,6 +45,7 @@ export function Sheet({
    className,
    children,
 }: SheetProps): React.ReactElement {
+   const t = useT();
    const dialogRef = useRef<HTMLDialogElement | null>(null);
    const titleId = useId();
    const descriptionId = useId();
@@ -104,7 +106,7 @@ export function Sheet({
                         </p>
                      ) : null}
                   </div>
-                  <IconButton label="Close" size="sm" onClick={onClose}>
+                  <IconButton className="ui-sheet__close" label={t('shell.close')} size="sm" onClick={onClose}>
                      <X size={16} />
                   </IconButton>
                </header>

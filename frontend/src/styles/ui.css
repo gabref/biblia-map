@@ -150,8 +150,10 @@
       flex-shrink: 0;
    }
 
+   /* Full chip colour: the 70% tint fell below 4.5:1 on the soft backgrounds (axe, both themes). */
    .ui-chip__count {
-      color: color-mix(in srgb, var(--chip-fg) 70%, transparent);
+      color: var(--chip-fg);
+      font-weight: 500;
       font-size: 0.9em;
       font-variant-numeric: tabular-nums;
    }
@@ -176,13 +178,14 @@
    }
 
    .ui-chip--incoming {
-      --chip-fg: var(--incoming);
+      /* Pulled toward ink for 4.5:1 on the tinted fill (raw token was 4.2:1 in light). */
+      --chip-fg: color-mix(in srgb, var(--incoming) 82%, var(--ink));
       --chip-bg: color-mix(in srgb, var(--incoming) 12%, transparent);
       --chip-line: color-mix(in srgb, var(--incoming) 26%, transparent);
    }
 
    .ui-chip--both {
-      --chip-fg: var(--both);
+      --chip-fg: color-mix(in srgb, var(--both) 82%, var(--ink));
       --chip-bg: color-mix(in srgb, var(--both) 12%, transparent);
       --chip-line: color-mix(in srgb, var(--both) 26%, transparent);
    }
@@ -991,8 +994,13 @@
       font-size: var(--text-sm);
    }
 
+   /* On the gilt wash the raw rubric / ink-3 were 4.4:1 / 4.1:1 in dark; nudge toward ink. */
    .ui-verse--selected .ui-verse__ref {
-      color: var(--rubric);
+      color: color-mix(in srgb, var(--rubric) 85%, var(--ink));
+   }
+
+   .ui-verse--selected .ui-verse__meta {
+      color: var(--ink-2);
    }
 
    .ui-verse__meta {

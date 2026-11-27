@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
 
 export function useCountUp(value: number, durationMs = 900): number {
-   const [displayValue, setDisplayValue] = useState(0);
+   const [displayValue, setDisplayValue] = useState(() => (prefersReducedMotion() ? value : 0));
 
    useEffect(() => {
+      // Honour the OS "reduce motion" setting (WCAG 2.3.3) and skip pointless animation work.
+      if (prefersReducedMotion() || durationMs <= 0) {
+         setDisplayValue(value);
+         return;
+      }
+
       const startTime = window.performance.now();
       let animationFrame = 0;
 
@@ -23,4 +29,10 @@ export function useCountUp(value: number, durationMs = 900): number {
    }, [ durationMs, value ]);
 
    return displayValue;
+}
+
+function prefersReducedMotion(): boolean {
+   return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false;
 }

@@ -784,10 +784,10 @@ function VerseGraph({
          >
             <defs>
                <marker id="arrow-outgoing" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
-                  <path d="M 0 0 L 10 5 L 0 10 z" fill="#d1a447" />
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--outgoing)" />
                </marker>
                <marker id="arrow-incoming" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
-                  <path d="M 0 0 L 10 5 L 0 10 z" fill="#6f9fe8" />
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--incoming)" />
                </marker>
             </defs>
             <rect className="graph-pan-surface" x="-480" y="-340" width="960" height="680" />

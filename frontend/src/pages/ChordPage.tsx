@@ -402,8 +402,8 @@ function ChordLink({ link, books, radius, onTooltip }: ChordLinkProps): React.Re
 
 function bookColor(book: Book): string {
    if (book.testament === 'OT') {
-      return book.bookNumber % 3 === 0 ? '#b98432' : '#d1a447';
+      return book.bookNumber % 3 === 0 ? 'var(--canon-law)' : 'var(--canon-history)';
    }
 
-   return book.bookNumber % 2 === 0 ? '#3f7d78' : '#5576a8';
+   return book.bookNumber % 2 === 0 ? 'var(--canon-letters)' : 'var(--canon-gospels)';
 }

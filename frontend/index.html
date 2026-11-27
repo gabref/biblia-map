@@ -8,7 +8,8 @@
          content="BibliaMap visualizes generated Bible cross-reference and study-note reference graphs."
       />
       <meta name="application-name" content="BibliaMap" />
-      <meta name="theme-color" content="#111413" />
+      <meta name="theme-color" content="#f3f4f1" />
+      <meta name="color-scheme" content="light dark" />
       <meta name="apple-mobile-web-app-title" content="BibliaMap" />
       <meta name="apple-mobile-web-app-capable" content="yes" />
       <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -22,9 +23,20 @@
       <link rel="icon" type="image/svg+xml" href="/bibliamap-icon.svg" />
       <link rel="alternate icon" type="image/svg+xml" href="/favicon.svg" />
       <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-      <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#d1a447" />
+      <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#c2321f" />
       <link rel="manifest" href="/site.webmanifest" />
       <script defer src="https://umami.gabudev.cloud/getinfo" data-website-id="a397311f-1bad-4372-a701-967b6cf84713"></script>
+      <script>
+         // Apply the saved theme before first paint (no flash). Absent = follow the OS.
+         (function () {
+            try {
+               var theme = localStorage.getItem('bibliamap-theme');
+               var dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+               if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
+               if (dark) document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d1015');
+            } catch (e) {}
+         })();
+      </script>
       <title>BibliaMap</title>
    </head>
    <body>

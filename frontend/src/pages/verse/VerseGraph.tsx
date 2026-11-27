@@ -724,7 +724,7 @@ export const VerseGraph = memo(function VerseGraph({
                   </marker>
                ))}
             </defs>
-            <g ref={viewportRef}>
+            <g ref={viewportRef} data-testid="graph-viewport">
                <g className="vs-graph__links" aria-hidden="true">
                   {linkElements}
                </g>

@@ -29,7 +29,25 @@ Generate every known asset in `assets/`:
 ./scripts/generate_all_datasets.sh
 ```
 
+Regenerate only specific assets (keeps the other entries in `datasets.json`):
+
+```bash
+./scripts/generate_all_datasets.sh --only assets/nwtsty_E.jwpub --only assets/nwtsty_I.jwpub
+```
+
 Generated datasets include verse text when the public chapter pages can be fetched for the publication.
+
+### Updating Source Assets
+
+`scripts/fetch_latest_assets.sh` checks the jw.org pub-media API (`https://b.jw-cdn.org/apis/pub-media/GETPUBMEDIALINKS`) for the known publications (`nwtsty` English and Italian, `nwt` English, `Rbi8` English) and compares the published MD5 checksum with the local `assets/*.jwpub`. Only changed files are downloaded: each goes to a temporary file in `assets/`, is verified against the CDN checksum and is then atomically moved into place.
+
+```bash
+./scripts/fetch_latest_assets.sh              # download changed assets
+./scripts/fetch_latest_assets.sh --dry-run    # only report what is out of date
+./scripts/fetch_latest_assets.sh --regenerate # download, then regenerate changed datasets
+```
+
+It requires `curl`, `python3` and `md5sum`. Commit the regenerated `frontend/public/generated/` output afterwards; the `.jwpub` files stay untracked.
 
 Run checks:
 

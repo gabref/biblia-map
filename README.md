@@ -35,7 +35,7 @@ Regenerate only specific assets (keeps the other entries in `datasets.json`):
 ./scripts/generate_all_datasets.sh --only assets/nwtsty_E.jwpub --only assets/nwtsty_I.jwpub
 ```
 
-Generated datasets include verse text when the public chapter pages can be fetched for the publication.
+Generated datasets include verse text when the public chapter pages can be fetched for the publication. Fetching is slow and rate-limited by jw.org (2 concurrent requests, a polite delay, timeouts, retries with exponential backoff and jitter), so `--verse-text-from <dir>` reuses `<dir>/verse-text/*.json` for every chapter whose verse ids and labels still match and fetches only the rest; `--verse-text-no-fetch` never contacts jw.org. The script reuses each dataset's existing verse text by default; set `BIBLIAMAP_REFETCH_TEXT=1` to fetch everything again or `BIBLIAMAP_NO_FETCH=1` to stay offline.
 
 Optional files are listed in each `manifest.json` under `features` (absent on older datasets): `search-index` (`search-index.json`), `verse-degree` (`stats.verse-degree.json`), `chapter-matrices` (`matrices/chapter/*`), `components` (`stats.components.json`), `study-note-text` (`study-notes/*`) and `footnote-text` (`footnotes/*`). Set `BIBLIAMAP_ASSETS_DIR` to read the `.jwpub` files from another directory. The script also rebuilds cross-edition reference diffs in `frontend/public/generated/compare/` with:
 

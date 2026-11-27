@@ -12,6 +12,11 @@
 # Environment:
 #   BIBLIAMAP_ASSETS_DIR  directory holding the .jwpub files (default: assets). Asset names
 #                         passed to --only keep the assets/<file>.jwpub form.
+#   BIBLIAMAP_REFETCH_TEXT=1  fetch all verse text from jw.org again. By default the verse text
+#                         already in frontend/public/generated/<dataset>/verse-text is reused for
+#                         every chapter whose verse ids and labels still match, and only the other
+#                         chapters are fetched.
+#   BIBLIAMAP_NO_FETCH=1  never contact jw.org (chapters without stored text stay without text).
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -68,6 +73,12 @@ for asset in "${selected[@]}"; do
       --compact
       --include-text
    )
+   if [[ "${BIBLIAMAP_REFETCH_TEXT:-0}" != 1 && -d "frontend/public/generated/$dataset_id/verse-text" ]]; then
+      args+=(--verse-text-from "frontend/public/generated/$dataset_id")
+   fi
+   if [[ "${BIBLIAMAP_NO_FETCH:-0}" == 1 ]]; then
+      args+=(--verse-text-no-fetch)
+   fi
 
    "${args[@]}"
 done

@@ -4,14 +4,13 @@
 mod components;
 mod derived;
 mod notes;
+mod verse_text;
 
 use std::{
    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
    fs::{self, File},
    io::{BufWriter, Write},
    path::{Path, PathBuf},
-   thread,
-   time::Duration,
 };
 
 use anyhow::{Context, Result};
@@ -24,9 +23,7 @@ use bibliamap_core::{
 use chrono::{SecondsFormat, Utc};
 use clap::Parser;
 use jwpub_reader::{ContentKey, open_jwpub};
-use reqwest::blocking::Client;
 use rusqlite::{Connection, Row};
-use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Parser)]
@@ -52,6 +49,17 @@ struct Args {
 
    #[arg(long, default_value_t = false)]
    no_text: bool,
+
+   /// With `--include-text`: reuse `<DIR>/verse-text/*.json` (usually the previous output of this
+   /// dataset) for every chapter whose stored verse ids and labels still match; only the other
+   /// chapters are fetched from jw.org.
+   #[arg(long, value_name = "DIR")]
+   verse_text_from: Option<PathBuf>,
+
+   /// With `--include-text`: never contact jw.org; chapters not covered by `--verse-text-from`
+   /// are left without text.
+   #[arg(long, default_value_t = false)]
+   verse_text_no_fetch: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -103,7 +111,7 @@ struct ChapterVerseExport {
    label: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct VerseTextExport {
    label: String,
@@ -271,9 +279,9 @@ fn main() -> Result<()> {
       features: Vec::new(),
    };
    let verse_text = if args.include_text && !args.no_text {
-      let text = fetch_verse_text(
+      let text = load_verse_text(
+         &args,
          &manifest.publication.symbol,
-         publication_locale(&args.input, &manifest.publication.symbol),
          &chapter_exports,
          &verse_map,
       )?;
@@ -1415,190 +1423,58 @@ fn build_adjacency(
    (source_adjacency, target_adjacency)
 }
 
-fn fetch_verse_text(
+/// Verse text for every chapter: reused from `--verse-text-from` where possible, fetched otherwise.
+fn load_verse_text(
+   args: &Args,
    publication_symbol: &str,
-   locale: String,
    chapters: &[ChapterExport],
    verse_map: &HashMap<i32, VerseRef>,
-) -> Result<BTreeMap<u8, BTreeMap<i32, VerseTextExport>>> {
-   const FETCH_BATCH_SIZE: usize = 10;
-
-   let client = Client::builder()
-      .user_agent("BibliaMap extractor")
-      .connect_timeout(Duration::from_secs(15))
-      .timeout(Duration::from_secs(60))
-      .build()
-      .context("failed to build verse text HTTP client")?;
-   let mut text_by_book = BTreeMap::<u8, BTreeMap<i32, VerseTextExport>>::new();
-   let mut canonical_to_jwpub = HashMap::new();
-
-   for verse in verse_map.values() {
-      canonical_to_jwpub.insert(verse.canonical_verse_id, verse.jwpub_verse_id);
-   }
-
-   for (batch_index, chunk) in chapters.chunks(FETCH_BATCH_SIZE).enumerate() {
-      let fetched_chapters = thread::scope(|scope| {
-         let canonical_to_jwpub_ref = &canonical_to_jwpub;
-         let handles = chunk
-            .iter()
-            .map(|chapter| {
-               let client = client.clone();
-               let locale = locale.as_str();
-
-               scope.spawn(move || {
-                  fetch_chapter_text(
-                     &client,
-                     publication_symbol,
-                     locale,
-                     chapter,
-                     canonical_to_jwpub_ref,
-                     verse_map,
-                  )
-               })
-            })
-            .collect::<Vec<_>>();
-
-         handles
-            .into_iter()
-            .map(|handle| handle.join().expect("text worker should not panic"))
-            .collect::<Result<Vec<_>>>()
-      })?;
-
-      for fetched_chapter in fetched_chapters {
-         for (book_number, verse_id, verse_text) in fetched_chapter {
-            text_by_book
-               .entry(book_number)
-               .or_default()
-               .insert(verse_id, verse_text);
-         }
+) -> Result<verse_text::VerseTextByBook> {
+   let (mut text, missing) = match &args.verse_text_from {
+      Some(dir) => {
+         let (text, report) = verse_text::reuse_verse_text(dir, chapters)?;
+         eprintln!(
+            "Reused verse text from {}: {} chapters / {} verses; {} chapters missing ({} with \
+             mismatching ids or labels), {} stray stored entries dropped",
+            dir.display(),
+            report.reused_chapters,
+            report.reused_verses,
+            report.missing.len(),
+            report.mismatched_chapters,
+            report.stray_entries,
+         );
+         (text, report.missing)
       }
-
-      eprintln!(
-         "Fetched verse text for {}/{} chapters",
-         ((batch_index + 1) * FETCH_BATCH_SIZE).min(chapters.len()),
-         chapters.len()
-      );
-   }
-
-   Ok(text_by_book)
-}
-
-/// Fetches a page body, retrying transient failures (timeouts, connection errors, 5xx, 429) with
-/// exponential backoff. Client errors other than 429 fail immediately.
-fn fetch_with_retry(client: &Client, url: &str) -> Result<String> {
-   const ATTEMPTS: u32 = 4;
-   let mut last_error = None;
-
-   for attempt in 0..ATTEMPTS {
-      if attempt > 0 {
-         thread::sleep(Duration::from_secs(2_u64.pow(attempt)));
-      }
-
-      let response = match client.get(url).send() {
-         Ok(response) => response,
-         Err(error) => {
-            last_error = Some(anyhow::Error::new(error).context(format!("failed to fetch {url}")));
-            continue;
-         }
-      };
-      let status = response.status();
-      if status.is_server_error() || status.as_u16() == 429 {
-         last_error = Some(anyhow::anyhow!("{url} answered {status}"));
-         continue;
-      }
-      let response = response
-         .error_for_status()
-         .with_context(|| format!("failed response for {url}"))?;
-
-      match response.text() {
-         Ok(body) => return Ok(body),
-         Err(error) => {
-            last_error = Some(
-               anyhow::Error::new(error).context(format!("failed to read response body for {url}")),
-            );
-         }
-      }
-   }
-
-   Err(
-      last_error
-         .unwrap_or_else(|| anyhow::anyhow!("no attempt made"))
-         .context(format!("giving up on {url} after {ATTEMPTS} attempts")),
-   )
-}
-
-fn fetch_chapter_text(
-   client: &Client,
-   publication_symbol: &str,
-   locale: &str,
-   chapter: &ChapterExport,
-   canonical_to_jwpub: &HashMap<i32, i32>,
-   verse_map: &HashMap<i32, VerseRef>,
-) -> Result<Vec<(u8, i32, VerseTextExport)>> {
-   let Some(first_verse) = chapter.verses.first() else {
-      return Ok(Vec::new());
+      None => (BTreeMap::new(), (0..chapters.len()).collect()),
    };
-   let finder_url = format!(
-      "https://www.jw.org/finder?wtlocale={locale}&prefer=lang&bible={}&pub={publication_symbol}",
-      first_verse.canonical_verse_id
-   );
-   let html = fetch_with_retry(client, &finder_url)?;
-   let document = Html::parse_document(&html);
-   let verse_selector = Selector::parse("span.verse").expect("verse selector should parse");
-   let mut verses = Vec::new();
+   let missing = missing
+      .into_iter()
+      .map(|index| &chapters[index])
+      .collect::<Vec<_>>();
 
-   for element in document.select(&verse_selector) {
-      let Some(element_id) = element.value().attr("id") else {
-         continue;
-      };
-      let Some(canonical_verse_id) = element_id
-         .strip_prefix('v')
-         .and_then(|id| id.parse::<i32>().ok())
-      else {
-         continue;
-      };
-      let Some(jwpub_verse_id) = canonical_to_jwpub.get(&canonical_verse_id) else {
-         continue;
-      };
-      let Some(verse) = verse_map.get(jwpub_verse_id) else {
-         continue;
-      };
-
-      if verse.book_number != chapter.book_number || verse.chapter_number != chapter.chapter_number
-      {
-         continue;
-      }
-
-      let text = clean_verse_text(&element.text().collect::<String>());
-      if text.is_empty() {
-         continue;
-      }
-
-      verses.push((
-         verse.book_number,
-         verse.jwpub_verse_id,
-         VerseTextExport {
-            label: verse.label.clone(),
-            text,
-         },
-      ));
+   if missing.is_empty() {
+      return Ok(text);
+   }
+   if args.verse_text_no_fetch {
+      eprintln!(
+         "Not fetching verse text for {} chapters (--verse-text-no-fetch)",
+         missing.len()
+      );
+      return Ok(text);
    }
 
-   Ok(verses)
-}
+   let fetched = verse_text::fetch_verse_text(
+      publication_symbol,
+      &publication_locale(&args.input, publication_symbol),
+      &missing,
+      verse_map,
+      &verse_text::FetchPolicy::default(),
+   )?;
+   for (book_number, verses) in fetched {
+      text.entry(book_number).or_default().extend(verses);
+   }
 
-fn clean_verse_text(raw_text: &str) -> String {
-   let without_markers = raw_text.replace(['+', '*'], " ");
-   let normalized = without_markers
-      .split_whitespace()
-      .collect::<Vec<_>>()
-      .join(" ");
-   let without_verse_number = normalized
-      .trim_start_matches(|character: char| character.is_ascii_digit())
-      .trim_start_matches(['\u{202f}', '\u{a0}', ' '])
-      .to_string();
-
-   without_verse_number.trim().to_string()
+   Ok(text)
 }
 
 fn publication_locale(input: &Path, publication_symbol: &str) -> String {

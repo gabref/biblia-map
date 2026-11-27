@@ -84,10 +84,9 @@ export const pageLoaders: Loaders = {
    verse: () => import('../pages/verse/VersePage').then((m) => ({ default: m.VersePage })),
    // E-E (manages its own scroll on chapter change / #vN).
    read: () => import('../pages/read/ReadPage').then((m) => ({ default: m.ReadPage })),
-   // E-D: () => import('../pages/insights/InsightsPage').then((m) => ({ default: m.InsightsPage })),
-   insights: () => import('./placeholders').then((m) => ({ default: m.InsightsPlaceholder })),
-   // E-D: () => import('../pages/insights/BookPage').then((m) => ({ default: m.BookPage })),
-   book: () => import('./placeholders').then((m) => ({ default: m.BookPlaceholder })),
+   // E-D (tab, reference type and selection are read from the URL; each tab is its own chunk).
+   insights: () => import('../pages/insights/InsightsPage').then((m) => ({ default: m.InsightsPage })),
+   book: () => import('../pages/insights/BookProfilePage').then((m) => ({ default: m.BookProfilePage })),
    // E-C (reads collectionId / print from useRoute() itself).
    study: () => import('../pages/StudyPage').then((m) => ({ default: m.StudyPage })),
    about: () => import('../pages/AboutPage').then((m) => ({ default: m.AboutPage })),
@@ -129,12 +128,15 @@ const dataPrefetchers: Record<ShellPageName, (datasetId: string, route?: AppRout
    insights: (datasetId, route) => {
       const tab = route?.name === 'insights' ? route.tab : undefined;
 
-      if (tab === 'chord') return [ loadBooks(datasetId), loadBookMatrix(datasetId, 'combined') ];
-      if (tab === 'clusters') return [ loadManifest(datasetId), loadBooks(datasetId) ];
+      const shell = [ loadManifest(datasetId), loadBooks(datasetId) ];
 
-      return [ loadManifest(datasetId), loadStatsSummary(datasetId) ];
+      // Hubs, heatmap, flows and clusters fetch their own (larger) files once the tab is open.
+      if (tab === 'chord') return [ ...shell, loadBookMatrix(datasetId, 'combined') ];
+      if (tab && tab !== 'overview') return shell;
+
+      return [ ...shell, loadStatsSummary(datasetId), loadBookMatrix(datasetId, 'combined') ];
    },
-   book: (datasetId) => [ loadManifest(datasetId), loadBooks(datasetId) ],
+   book: (datasetId) => [ loadManifest(datasetId), loadBooks(datasetId), loadBookMatrix(datasetId, 'combined') ],
    study: () => [],
    about: (datasetId) => [ loadManifest(datasetId), loadStatsSummary(datasetId) ],
    styleguide: () => [],

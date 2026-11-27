@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
    <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -17,13 +17,13 @@
       <meta property="og:title" content="BibliaMap — Bible cross-reference map" />
       <meta property="og:description" content="Explore the Bible’s cross-references as an interactive map — books, chapters and study notes. Esplora i riferimenti incrociati della Bibbia." />
       <meta property="og:url" content="https://bibliamap.gabudev.cloud/" />
-      <meta property="og:image" content="https://bibliamap.gabudev.cloud/og-image.png?v=2" />
-      <meta property="og:image:secure_url" content="https://bibliamap.gabudev.cloud/og-image.png?v=2" />
+      <meta property="og:image" content="https://bibliamap.gabudev.cloud/og-image.png?v=3" />
+      <meta property="og:image:secure_url" content="https://bibliamap.gabudev.cloud/og-image.png?v=3" />
       <meta property="og:image:type" content="image/png" />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
-      <meta property="og:image:alt" content="BibliaMap logo beside a circular chord diagram of cross-references between the books of the Bible" />
-      <meta property="og:image" content="https://bibliamap.gabudev.cloud/og-image-square.png?v=2" />
+      <meta property="og:image:alt" content="BibliaMap mark and name beside a circular chord diagram of cross-references between the books of the Bible" />
+      <meta property="og:image" content="https://bibliamap.gabudev.cloud/og-image-square.png?v=3" />
       <meta property="og:image:type" content="image/png" />
       <meta property="og:image:width" content="600" />
       <meta property="og:image:height" content="600" />
@@ -32,23 +32,26 @@
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content="BibliaMap — Bible cross-reference map" />
       <meta name="twitter:description" content="Explore the Bible’s cross-references as an interactive map — books, chapters and study notes. Esplora i riferimenti incrociati della Bibbia." />
-      <meta name="twitter:image" content="https://bibliamap.gabudev.cloud/og-image.png?v=2" />
-      <meta name="twitter:image:alt" content="BibliaMap logo beside a circular chord diagram of cross-references between the books of the Bible" />
+      <meta name="twitter:image" content="https://bibliamap.gabudev.cloud/og-image.png?v=3" />
+      <meta name="twitter:image:alt" content="BibliaMap mark and name beside a circular chord diagram of cross-references between the books of the Bible" />
       <!-- /Share preview -->
-      <link rel="icon" type="image/svg+xml" href="/bibliamap-icon.svg" />
-      <link rel="alternate icon" type="image/svg+xml" href="/favicon.svg" />
+      <link rel="icon" href="/favicon.ico" sizes="48x48" />
+      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
       <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#c2321f" />
       <link rel="manifest" href="/site.webmanifest" />
       <script defer src="https://umami.gabudev.cloud/getinfo" data-website-id="a397311f-1bad-4372-a701-967b6cf84713"></script>
       <script>
-         // Apply the saved theme before first paint (no flash). Absent = follow the OS.
+         // Theme before first paint (no flash). Dark is the default (<html data-theme="dark">); a stored
+         // choice of "light" or "system" (follow the OS) overrides it. Keep in sync with hooks/useTheme.ts.
          (function () {
             try {
+               var root = document.documentElement;
                var theme = localStorage.getItem('bibliamap-theme');
-               var dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
-               if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
-               document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#0d1015' : '#f3f4f1');
+               if (theme === 'light') root.setAttribute('data-theme', 'light');
+               else if (theme === 'system') root.removeAttribute('data-theme');
+               var light = theme === 'light' || (theme === 'system' && matchMedia('(prefers-color-scheme: light)').matches);
+               if (light) document.querySelector('meta[name="theme-color"]').setAttribute('content', '#f3f4f1');
             } catch (e) {}
          })();
       </script>

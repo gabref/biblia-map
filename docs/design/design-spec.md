@@ -86,9 +86,15 @@ Tone of voice: plain, specific, sentence case. Name things by what the student d
 
 All tokens are CSS custom properties in `frontend/src/styles/tokens.css`. Colours are declared
 once with `light-dark()`; `color-scheme` on `:root` picks the side. No `data-theme` attribute =
-follow the OS; `data-theme="light|dark"` forces one (set by `useTheme`, restored before first paint
-by the inline script in `index.html`). A subtree can be locally inverted with
-`style="color-scheme: dark"`.
+follow the OS; `data-theme="light|dark"` forces one.
+
+**Dark is the default** (owner decision, Sprint 2): `index.html` ships `<html data-theme="dark">`,
+so a first visit is dark whatever the OS says. The ThemeToggle steps dark → light → system; the
+choice is stored under `bibliamap-theme` (`dark` / `light` / `system`), applied by `useTheme` and
+restored before first paint by the inline script in `index.html`. Only `system` removes the
+attribute and follows the OS. A subtree can be locally inverted with `style="color-scheme: dark"`.
+
+Brand mark, icon set and share cards: see `docs/design/brand/README.md`.
 
 ### 3.1 Colour
 
@@ -216,7 +222,7 @@ Primitives: `frontend/src/components/ui/` (import from `../components/ui`), styl
 | **Field / Select** | `Field: label, hint, children(id)` · `Select: value, options, onChange, size` | Native select kept on purpose (best picker on phones). |
 | **Kbd** | children | Shortcut hints. |
 | **ToastProvider / useToast** | `toast(string \| {title, description, tone, duration, action})`, `dismiss(id)` | Mounted in `main.tsx`. Max 3, 4s default, `role=status` (`alert` for danger). Toasts sit under open dialogs — don't fire one from inside a Sheet. |
-| **ThemeToggle** | `theme` (from `useTheme()`), `showLabel` | In the shell. |
+| **ThemeToggle** | `theme` (from `useTheme()`), `showLabel` | In the shell. Steps dark (default) → light → system; icon shows the current choice, the accessible name says what the next press does. |
 
 Shared components restyled in place (same props): `PageHeader`, `StatCard`, `FilterPanel`,
 `DatasetBadge`, `LoadingShimmer` (now `role="status"`), `ErrorState` (new optional `onRetry`;

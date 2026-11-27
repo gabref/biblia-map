@@ -150,8 +150,10 @@
       flex-shrink: 0;
    }
 
+   /* Full chip colour: the 70% tint fell below 4.5:1 on the soft backgrounds (axe, both themes). */
    .ui-chip__count {
-      color: color-mix(in srgb, var(--chip-fg) 70%, transparent);
+      color: var(--chip-fg);
+      font-weight: 500;
       font-size: 0.9em;
       font-variant-numeric: tabular-nums;
    }
@@ -176,13 +178,14 @@
    }
 
    .ui-chip--incoming {
-      --chip-fg: var(--incoming);
+      /* Pulled toward ink for 4.5:1 on the tinted fill (raw token was 4.2:1 in light). */
+      --chip-fg: color-mix(in srgb, var(--incoming) 82%, var(--ink));
       --chip-bg: color-mix(in srgb, var(--incoming) 12%, transparent);
       --chip-line: color-mix(in srgb, var(--incoming) 26%, transparent);
    }
 
    .ui-chip--both {
-      --chip-fg: var(--both);
+      --chip-fg: color-mix(in srgb, var(--both) 82%, var(--ink));
       --chip-bg: color-mix(in srgb, var(--both) 12%, transparent);
       --chip-line: color-mix(in srgb, var(--both) 26%, transparent);
    }
@@ -700,6 +703,32 @@
          animation-name: slide-in-bottom;
       }
 
+      /* One-handed use: 44px close target and full-width footer actions in the thumb zone. */
+      .ui-sheet__close {
+         min-width: var(--tap-min);
+         min-height: var(--tap-min);
+         margin: calc(var(--space-2) * -1) calc(var(--space-2) * -1) 0 0;
+      }
+
+      .ui-sheet__footer {
+         padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+      }
+
+      .ui-sheet__footer > * {
+         flex: 1;
+         min-height: var(--tap-min);
+      }
+
+      .ui-sheet--bottom .ui-sheet__surface,
+      .ui-sheet--responsive .ui-sheet__surface {
+         padding-bottom: 0;
+      }
+
+      .ui-sheet--bottom .ui-sheet__surface:not(:has(.ui-sheet__footer)),
+      .ui-sheet--responsive .ui-sheet__surface:not(:has(.ui-sheet__footer)) {
+         padding-bottom: env(safe-area-inset-bottom);
+      }
+
       /* Grab handle hint on bottom sheets. */
       .ui-sheet--responsive .ui-sheet__surface::before,
       .ui-sheet--bottom .ui-sheet__surface::before {
@@ -991,8 +1020,13 @@
       font-size: var(--text-sm);
    }
 
+   /* On the gilt wash the raw rubric / ink-3 were 4.4:1 / 4.1:1 in dark; nudge toward ink. */
    .ui-verse--selected .ui-verse__ref {
-      color: var(--rubric);
+      color: color-mix(in srgb, var(--rubric) 85%, var(--ink));
+   }
+
+   .ui-verse--selected .ui-verse__meta {
+      color: var(--ink-2);
    }
 
    .ui-verse__meta {
@@ -1124,5 +1158,36 @@
 
    .ui-skeleton {
       animation: pulse-soft 2s ease-in-out infinite;
+   }
+
+   /* ================= Touch targets (phones) =================
+    * Spec §9: 44×44px minimum under 760px. Default-size buttons grow to 44px; dense controls
+    * (sm buttons, chips, chip remove, tabs) keep their look but get an invisible 44px hit area.
+    */
+   @media (max-width: 760px) {
+      .ui-button:not(.ui-button--sm) {
+         --btn-h: var(--tap-min);
+      }
+
+      .ui-button--sm,
+      button.ui-chip,
+      .ui-chip__main,
+      .ui-chip__remove,
+      .ui-tabs__tab {
+         position: relative;
+      }
+
+      .ui-button--sm::after,
+      button.ui-chip::after,
+      .ui-chip__main::after,
+      .ui-chip__remove::after,
+      .ui-tabs__tab::after {
+         position: absolute;
+         top: min(0px, calc((100% - var(--tap-min)) / 2));
+         right: min(0px, calc((100% - var(--tap-min)) / 2));
+         bottom: min(0px, calc((100% - var(--tap-min)) / 2));
+         left: min(0px, calc((100% - var(--tap-min)) / 2));
+         content: "";
+      }
    }
 }

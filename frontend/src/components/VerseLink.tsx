@@ -1,5 +1,6 @@
 import type { AnchorHTMLAttributes, MouseEvent, ReactElement, ReactNode, Ref } from 'react';
 
+import { bookName, getLocale, useLocale, type Locale } from '../i18n';
 import { bookByNumber, navigate, verseHref, type RouteParams, type VerseLocation } from '../routing/routes';
 
 /**
@@ -22,9 +23,13 @@ export interface VerseLinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElem
    ref?: Ref<HTMLAnchorElement>;
 }
 
-/** English fallback label, e.g. "John 3:16". Prefer the dataset's localized `label` when available. */
-export function fallbackVerseLabel(verse: VerseLocation): string {
-   const name = bookByNumber(verse.bookNumber)?.nameEn ?? `Book ${verse.bookNumber}`;
+/**
+ * Fallback label in the UI language, e.g. "John 3:16" / "Giovanni 3:16". Pass `locale` to force
+ * one (e.g. `datasetLocale(datasetId)` for the edition's language). Prefer the dataset's
+ * `label` from the verse index when it is loaded.
+ */
+export function fallbackVerseLabel(verse: VerseLocation, locale: Locale = getLocale()): string {
+   const name = bookName(verse.bookNumber, locale) ?? bookByNumber(verse.bookNumber)?.nameEn ?? `${verse.bookNumber}`;
 
    return `${name} ${verse.chapterNumber}:${verse.verseNumber}`;
 }
@@ -49,6 +54,7 @@ export function VerseLink({
    ref,
    ...anchorProps
 }: VerseLinkProps): ReactElement {
+   const locale = useLocale();
    const href = verseHref(verse, params);
 
    const handleClick = (event: MouseEvent<HTMLAnchorElement>): void => {
@@ -64,7 +70,7 @@ export function VerseLink({
 
    return (
       <a {...anchorProps} ref={ref} href={href} target={target} onClick={handleClick}>
-         {children ?? label ?? verse.label ?? fallbackVerseLabel(verse)}
+         {children ?? label ?? verse.label ?? fallbackVerseLabel(verse, locale)}
       </a>
    );
 }

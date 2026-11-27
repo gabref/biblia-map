@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { VerseLink } from './VerseLink';
+import { act } from '@testing-library/react';
+
+import { setLocale } from '../i18n';
+import { resetLocaleForTests } from '../i18n/locale';
+import { VerseLink, fallbackVerseLabel } from './VerseLink';
 
 const john316 = { bookNumber: 43, chapterNumber: 3, verseNumber: 16 };
 
@@ -45,5 +49,26 @@ describe('VerseLink', () => {
 
       fireEvent.click(link);
       expect(window.location.pathname).toBe('/verse/john/3/16');
+   });
+});
+
+describe('fallbackVerseLabel', () => {
+   afterEach(() => {
+      window.localStorage.clear();
+      resetLocaleForTests();
+   });
+
+   it('uses the UI language, or an explicit locale', () => {
+      expect(fallbackVerseLabel(john316, 'en')).toBe('John 3:16');
+      expect(fallbackVerseLabel(john316, 'it')).toBe('Giovanni 3:16');
+      expect(fallbackVerseLabel({ bookNumber: 66, chapterNumber: 21, verseNumber: 4 }, 'it')).toBe('Rivelazione 21:4');
+      expect(fallbackVerseLabel({ bookNumber: 99, chapterNumber: 1, verseNumber: 1 }, 'it')).toBe('99 1:1');
+   });
+
+   it('re-renders VerseLink text when the language changes', () => {
+      render(<VerseLink verse={john316} />);
+      expect(screen.getByRole('link')).toHaveTextContent('John 3:16');
+      act(() => setLocale('it'));
+      expect(screen.getByRole('link')).toHaveTextContent('Giovanni 3:16');
    });
 });

@@ -630,11 +630,6 @@
       text-decoration: none;
    }
 
-   /* .ui-chip__count is 3.65:1 in light theme (design-system issue); keep AA here. */
-   .read-cc__chips .ui-chip__count {
-      color: var(--ink-2, #454c59);
-   }
-
    /* ---------- Mobile ---------- */
    @media (max-width: 760px) {
       .read-header {

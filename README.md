@@ -37,6 +37,13 @@ Regenerate only specific assets (keeps the other entries in `datasets.json`):
 
 Generated datasets include verse text when the public chapter pages can be fetched for the publication.
 
+Optional files are listed in each `manifest.json` under `features` (absent on older datasets): `search-index` (`search-index.json`), `verse-degree` (`stats.verse-degree.json`), `chapter-matrices` (`matrices/chapter/*`), `components` (`stats.components.json`), `study-note-text` (`study-notes/*`) and `footnote-text` (`footnotes/*`). Set `BIBLIAMAP_ASSETS_DIR` to read the `.jwpub` files from another directory. The script also rebuilds cross-edition reference diffs in `frontend/public/generated/compare/` with:
+
+```bash
+cargo run -p bibliamap-extractor --bin bibliamap-compare -- \
+  --generated frontend/public/generated --pair nwt:rbi8
+```
+
 ### Updating Source Assets
 
 `scripts/fetch_latest_assets.sh` checks the jw.org pub-media API (`https://b.jw-cdn.org/apis/pub-media/GETPUBMEDIALINKS`) for the known publications (`nwtsty` English and Italian, `nwt` English, `Rbi8` English) and compares the published MD5 checksum with the local `assets/*.jwpub`. Only changed files are downloaded: each goes to a temporary file in `assets/`, is verified against the CDN checksum and is then atomically moved into place.

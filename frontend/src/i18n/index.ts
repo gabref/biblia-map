@@ -44,6 +44,7 @@ export {
 } from './locale';
 export type { Locale, LocaleInputs } from './locale';
 export { INTL_TAGS, formatDateIn, formatDateTimeIn, formatNumberIn, formatPercentIn } from './format';
+export { bookName } from './bookNames';
 
 export type TranslateVars = Record<string, string | number>;
 export type TranslateFn = (key: MessageKey, vars?: TranslateVars) => string;

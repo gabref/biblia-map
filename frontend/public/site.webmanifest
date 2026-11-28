@@ -7,6 +7,11 @@
    "display": "standalone",
    "background_color": "#0d1015",
    "theme_color": "#0d1015",
+   "share_target": {
+      "action": "/open",
+      "method": "GET",
+      "params": { "title": "title", "text": "text", "url": "url" }
+   },
    "icons": [
       {
          "src": "/bibliamap-icon.svg",

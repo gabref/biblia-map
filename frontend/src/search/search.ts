@@ -7,10 +7,11 @@
  *   "rom"       → book   Romans            (bookHref → book profile)
  *   "gi"        → every book starting with "gi" (Giobbe, Gioele, Giona, Giosuè, Giovanni, …)
  */
+import { targetFromText } from '../routing/inboundLinks';
 import { bookHref, chapterHref, verseHref, type RouteParams } from '../routing/routes';
 import { createBookMatcher, type BookMatcher } from './bookMatcher';
 import { parseQuery, type ParsedQuery } from './parseQuery';
-import { MAX_VERSE_FALLBACK, verseCountOf, type SearchBook, type SearchData } from './searchData';
+import { findSearchBook, MAX_VERSE_FALLBACK, verseCountOf, type SearchBook, type SearchData } from './searchData';
 
 interface ResultBase {
    /** Stable key for lists. */
@@ -173,6 +174,17 @@ function followUps(book: SearchBook, parsed: ParsedQuery, score: number): Search
 /** Runs the search. Pure and synchronous; cheap enough to call on every keystroke. */
 export function searchCitations(query: string, data: SearchData, options: SearchOptions = {}): SearchResult[] {
    const limit = options.limit ?? SEARCH_LIMIT;
+   // A pasted JW Library / jw.org link resolves straight to its verse or chapter.
+   const linked = targetFromText(query);
+
+   if (linked) {
+      const book = findSearchBook(data, linked.book);
+
+      if (!book) return [];
+
+      return [ linked.kind === 'verse' ? verseResult(book, linked.chapter, linked.verse, 1, linked.endVerse) : chapterResult(book, linked.chapter, 1) ];
+   }
+
    const parsed = parseQuery(query);
 
    if (!parsed) {
